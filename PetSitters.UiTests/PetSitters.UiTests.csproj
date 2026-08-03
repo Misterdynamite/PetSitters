@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Automated end-to-end UI tests for the PetSitters WPF app.
+
+    These drive the *real* built PetSitters.exe through the Windows UI Automation
+    layer (via FlaUI) - clicking buttons, typing into boxes and reading labels
+    exactly as a human would. This is deliberately separate from the assignment's
+    logic/unit-test project: it is a slower, end-to-end "does the whole app hang
+    together" check.
+
+    Targets net472 to match the PetSitters app. Run it from Visual Studio's Test
+    Explorer (Test > Run All Tests) - a full MSBuild/desktop session is required
+    because the tests launch a windowed application.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AssemblyName>PetSitters.UiTests</AssemblyName>
+    <RootNamespace>PetSitters.UiTests</RootNamespace>
+    <!-- UI automation cannot run in parallel with itself. -->
+    <RunSettingsFilePath>$(MSBuildProjectDirectory)\.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.6.4" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.6.4" />
+    <PackageReference Include="FlaUI.Core" Version="4.0.0" />
+    <PackageReference Include="FlaUI.UIA3" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Build-order dependency only: this forces the PetSitters app to be built
+      before the tests run, but does NOT copy its assemblies into the test
+      output. The tests launch PetSitters.exe from its own bin folder (where its
+      native SQLite interop DLLs live), located at runtime by AppLocator.
+    -->
+    <ProjectReference Include="..\PetSitters.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

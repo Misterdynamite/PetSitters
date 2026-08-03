@@ -1,0 +1,189 @@
+<UserControl x:Class="PetSitters.Views.OwnerDashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignHeight="560" d:DesignWidth="900">
+    <TabControl Margin="16" Background="Transparent" BorderThickness="0">
+
+        <!-- FR-3: personal details incl. location -->
+        <TabItem Header="My Details">
+            <Border Background="{StaticResource CardBg}" CornerRadius="8" Padding="24" Margin="0,12"
+                    BorderBrush="#E5E7EB" BorderThickness="1" HorizontalAlignment="Left" Width="420"
+                    VerticalAlignment="Top">
+                <StackPanel>
+                    <TextBlock Text="My details" Style="{StaticResource H1}"/>
+                    <TextBlock Text="Email" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock x:Name="EmailText" FontSize="14"/>
+                    <TextBlock Text="Full name" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="NameBox"/>
+                    <TextBlock Text="Phone" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="PhoneBox"/>
+                    <TextBlock Text="Location (suburb / city)" Style="{StaticResource FieldLabel}"/>
+                    <TextBox x:Name="LocationBox"/>
+                    <Button Content="Save details" Margin="0,16,0,0" HorizontalAlignment="Left"
+                            Click="SaveDetails_Click"/>
+                    <TextBlock x:Name="DetailsStatus" Foreground="{StaticResource Brand}" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+        </TabItem>
+
+        <!-- FR-4: register pet details -->
+        <TabItem Header="My Pets">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="320"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="My pets" Style="{StaticResource H1}"/>
+                        <ListView x:Name="PetsList" BorderThickness="0">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="110"/>
+                                    <GridViewColumn Header="Species" DisplayMemberBinding="{Binding Species}" Width="90"/>
+                                    <GridViewColumn Header="Breed" DisplayMemberBinding="{Binding Breed}" Width="110"/>
+                                    <GridViewColumn Header="Age" DisplayMemberBinding="{Binding Age}" Width="50"/>
+                                    <GridViewColumn Header="Notes" DisplayMemberBinding="{Binding Notes}" Width="150"/>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Add a pet" Style="{StaticResource H2}"/>
+                        <TextBlock Text="Name" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PetNameBox"/>
+                        <TextBlock Text="Species (Dog, Cat...)" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PetSpeciesBox"/>
+                        <TextBlock Text="Breed" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PetBreedBox"/>
+                        <TextBlock Text="Age (years)" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PetAgeBox" Text="0"/>
+                        <TextBlock Text="Care notes" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="PetNotesBox" AcceptsReturn="True" TextWrapping="Wrap" Height="48"/>
+                        <Button Content="Add pet" Margin="0,12,0,0" Click="AddPet_Click"/>
+                        <Button Content="Delete selected pet" Style="{StaticResource DangerButton}"
+                                Margin="0,8,0,0" Click="DeletePet_Click"/>
+                        <TextBlock x:Name="PetStatus" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
+                                   Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- FR-5 + FR-6: browse sitters and request a booking -->
+        <TabItem Header="Find Sitters">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="340"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource CardBg}" CornerRadius="8" Padding="12"
+                        BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Available sitters" Style="{StaticResource H2}"/>
+                        <ListBox x:Name="SittersList" BorderThickness="0"
+                                 SelectionChanged="SittersList_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="2,6">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14"/>
+                                        <TextBlock Text="{Binding SubHeading}" Foreground="{StaticResource Muted}"
+                                                   FontSize="12"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource CardBg}" CornerRadius="8" Padding="20"
+                        BorderBrush="#E5E7EB" BorderThickness="1">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="SitterDetailPanel">
+                            <TextBlock x:Name="NoSitterSelected" Text="Select a sitter to see their profile and request a booking."
+                                       Foreground="{StaticResource Muted}"/>
+
+                            <StackPanel x:Name="SitterDetailContent" Visibility="Collapsed">
+                                <TextBlock x:Name="DetailName" Style="{StaticResource H1}"/>
+                                <TextBlock x:Name="DetailMeta" Foreground="{StaticResource Muted}"/>
+
+                                <TextBlock Text="About" Style="{StaticResource H2}"/>
+                                <TextBlock x:Name="DetailBio" TextWrapping="Wrap"/>
+                                <TextBlock Text="Preferences" Style="{StaticResource H2}"/>
+                                <TextBlock x:Name="DetailPreferences" TextWrapping="Wrap"/>
+                                <TextBlock Text="Qualifications" Style="{StaticResource H2}"/>
+                                <TextBlock x:Name="DetailQualifications" TextWrapping="Wrap"/>
+                                <TextBlock Text="Availability" Style="{StaticResource H2}"/>
+                                <TextBlock x:Name="DetailAvailability" TextWrapping="Wrap"/>
+
+                                <Border Background="#F0FAF7" CornerRadius="6" Padding="14" Margin="0,16,0,0"
+                                        BorderBrush="#CDEBE3" BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="Request a booking" Style="{StaticResource H2}" Margin="0,0,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="12"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Start date" Style="{StaticResource FieldLabel}"/>
+                                                <DatePicker x:Name="StartDatePicker"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="End date" Style="{StaticResource FieldLabel}"/>
+                                                <DatePicker x:Name="EndDatePicker"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock Text="Which pet?" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox x:Name="BookingPetCombo" DisplayMemberPath="Name"/>
+
+                                        <TextBlock Text="Message to sitter" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox x:Name="BookingMessageBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 Height="48"/>
+
+                                        <Button Content="Send booking request" Margin="0,12,0,0"
+                                                HorizontalAlignment="Left" Click="RequestBooking_Click"/>
+                                        <TextBlock x:Name="BookingStatus" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- FR-6: track requested bookings -->
+        <TabItem Header="My Bookings">
+            <Border Background="{StaticResource CardBg}" CornerRadius="8" Padding="16" Margin="0,12"
+                    BorderBrush="#E5E7EB" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="My booking requests" Style="{StaticResource H1}"/>
+                    <ListView x:Name="BookingsList" BorderThickness="0">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Sitter" DisplayMemberBinding="{Binding SitterName}" Width="150"/>
+                                <GridViewColumn Header="Pet" DisplayMemberBinding="{Binding PetName}" Width="110"/>
+                                <GridViewColumn Header="Dates" DisplayMemberBinding="{Binding DateRange}" Width="180"/>
+                                <GridViewColumn Header="Nights" DisplayMemberBinding="{Binding Nights}" Width="60"/>
+                                <GridViewColumn Header="Est. total" DisplayMemberBinding="{Binding Total}" Width="90"/>
+                                <GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="90"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </DockPanel>
+            </Border>
+        </TabItem>
+    </TabControl>
+</UserControl>
