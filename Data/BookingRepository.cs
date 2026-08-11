@@ -96,5 +96,21 @@ SELECT last_insert_rowid();";
                 CreatedUtc = DateTime.Parse((string)reader["CreatedUtc"], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
             };
         }
+
+        public Booking GetById(int id)
+        {
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM Bookings WHERE Id = @id LIMIT 1;";
+                command.Parameters.AddWithValue("@id", id);
+                using (var reader = command.ExecuteReader())
+                {
+                    if (reader.Read())
+                        return Map(reader);
+                }
+            }
+            return null;
+        }
     }
 }

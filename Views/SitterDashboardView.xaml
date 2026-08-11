@@ -4,7 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignHeight="560" d:DesignWidth="900">
-    <TabControl Margin="16" Background="Transparent" BorderThickness="0">
+    <TabControl x:Name="RootTabs" Margin="16" Background="Transparent" BorderThickness="0">
 
         <!-- FR-7: personal details incl. location -->
         <TabItem Header="My Details">
@@ -110,6 +110,64 @@
                                    TextWrapping="Wrap"/>
                     </StackPanel>
                 </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- My Chats: list accepted bookings with an Open Chat action -->
+        <TabItem Header="My Chats">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="260" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Active chats (accepted bookings)" Style="{StaticResource H1}"/>
+                        <ListView x:Name="ChatsList" BorderThickness="0" SelectionChanged="ChatsList_SelectionChanged">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="With" DisplayMemberBinding="{Binding OwnerName}" Width="150"/>
+                                    <GridViewColumn Header="Dates" DisplayMemberBinding="{Binding DateRange}" Width="170"/>
+                                    <GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="80"/>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Selected chat" Style="{StaticResource H2}"/>
+                        <TextBlock Text="Details" Style="{StaticResource FieldLabel}"/>
+                        <TextBlock x:Name="ChatSelectedDetails" TextWrapping="Wrap" Text="Select a chat to open."/>
+                        <Button Content="Open chat" Margin="0,12,0,0" Click="OpenChat_Click"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- Chat tab becomes visible once a booking is accepted and is scoped to that booking -->
+        <TabItem Header="Chat" x:Name="ChatTab" Visibility="Collapsed">
+            <Grid Margin="0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
+                    <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="ChatMessagesList">
+                            <!-- Items bound programmatically -->
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBox x:Name="ChatInput" Width="680" Height="36"/>
+                    <Button Content="Send" Margin="8,0,0,0" Width="80" Click="ChatSend_Click"/>
+                </StackPanel>
             </Grid>
         </TabItem>
     </TabControl>

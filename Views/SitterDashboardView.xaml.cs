@@ -30,7 +30,28 @@ namespace PetSitters.Views
             LoadRequests();
         }
 
+        private void ChatsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ChatsList.SelectedItem is SitterRequestRow row)
+            {
+                ChatSelectedDetails.Text = $"With: {row.OwnerName}\nDates: {row.DateRange}\nStatus: {row.Status}";
+            }
+        }
+
+        private void OpenChat_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(ChatsList.SelectedItem is SitterRequestRow row))
+            {
+                MessageBox.Show("Select a chat first.");
+                return;
+            }
+            ShowChatForBooking(row.BookingId);
+        }
+
         private User Me => _services.CurrentUser;
+
+        // Current booking id for which chat is open
+        private int? _activeChatBookingId;
 
         // ---- FR-7: personal details ------------------------------------------------
         private void LoadDetails()
@@ -111,7 +132,8 @@ namespace PetSitters.Views
         private void LoadRequests()
         {
             var rows = new List<SitterRequestRow>();
-            foreach (Booking b in _services.Bookings.GetForSitter(Me.Id))
+            // Only show pending requests in the requests list; accepted/declined are removed
+            foreach (Booking b in _services.Bookings.GetForSitter(Me.Id).Where(b => b.Status == BookingStatus.Pending))
             {
                 User owner = _services.Users.FindById(b.OwnerUserId);
 
@@ -126,6 +148,33 @@ namespace PetSitters.Views
             RequestsList.ItemsSource = rows;
             RequestMessage.Text = "Select a request to view its message.";
             RequestStatus.Text = string.Empty;
+            // Also refresh active chats view
+            LoadChats();
+        }
+
+        private void LoadChats()
+        {
+            var rows = new List<SitterRequestRow>();
+            // Chat list shows accepted bookings where current user is participant
+            foreach (Booking b in _services.Bookings.GetForSitter(Me.Id).Where(b => b.Status == BookingStatus.Accepted))
+            {
+                User owner = _services.Users.FindById(b.OwnerUserId);
+                Pet pet = null;
+                if (b.PetId.HasValue)
+                    pet = _services.Pets.GetByOwner(b.OwnerUserId).FirstOrDefault(p => p.Id == b.PetId.Value);
+                rows.Add(new SitterRequestRow(b, owner, pet));
+            }
+            // Also include bookings where the current user is the owner and sitter accepted
+            foreach (Booking b in _services.Bookings.GetForOwner(Me.Id).Where(b => b.Status == BookingStatus.Accepted))
+            {
+                User sitter = _services.Users.FindById(b.SitterUserId);
+                Pet pet = null;
+                if (b.PetId.HasValue)
+                    pet = _services.Pets.GetByOwner(b.OwnerUserId).FirstOrDefault(p => p.Id == b.PetId.Value);
+                rows.Add(new SitterRequestRow(b, sitter, pet));
+            }
+            ChatsList.ItemsSource = rows;
+            ChatSelectedDetails.Text = "Select a chat to open.";
         }
 
         private void UpdateSelected(BookingStatus status)
@@ -141,6 +190,10 @@ namespace PetSitters.Views
             RequestStatus.Foreground = (Brush)FindResource("Brand");
             RequestStatus.Text = $"Request {status.ToString().ToLowerInvariant()}.";
             LoadRequests();
+            if (status == BookingStatus.Accepted)
+            {
+                ShowChatForBooking(row.BookingId);
+            }
         }
 
         private void Accept_Click(object sender, RoutedEventArgs e)
@@ -170,6 +223,71 @@ namespace PetSitters.Views
 
             var dialog = new JobDetailsWindow(row) { Owner = _shell };
             dialog.ShowDialog();
+        }
+
+        // --- Chat support ---------------------------------------------------------
+        private void ShowChatForBooking(int bookingId)
+        {
+            // Only allow opening chat for bookings where current user is either owner or sitter
+            var booking = _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == bookingId)
+                          ?? _services.Bookings.GetForOwner(Me.Id).FirstOrDefault(b => b.Id == bookingId);
+            if (booking == null)
+            {
+                MessageBox.Show("You are not a participant in this booking.");
+                return;
+            }
+
+            _activeChatBookingId = bookingId;
+            ChatTab.Visibility = Visibility.Visible;
+            // Load chat messages
+            RefreshChat();
+            // switch focus to chat tab
+            ChatTab.IsSelected = true;
+        }
+
+        private void RefreshChat()
+        {
+            if (!_activeChatBookingId.HasValue) return;
+            var messages = _services.Chats.GetForBooking(_activeChatBookingId.Value);
+            ChatMessagesList.Items.Clear();
+            foreach (var m in messages)
+            {
+                var text = new TextBlock { Text = $"{(_services.Users.FindById(m.SenderUserId)?.FullName ?? "Unknown")}: {m.MessageText}", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,4,0,4) };
+                ChatMessagesList.Items.Add(text);
+            }
+            // scroll to end
+            ChatScroll.ScrollToEnd();
+        }
+
+        private void ChatSend_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_activeChatBookingId.HasValue)
+            {
+                MessageBox.Show("No chat is open.");
+                return;
+            }
+            var text = ChatInput.Text?.Trim();
+            if (string.IsNullOrEmpty(text)) return;
+
+            // Security: ensure current user is participant in booking before inserting
+            var booking = _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == _activeChatBookingId.Value)
+                          ?? _services.Bookings.GetForOwner(Me.Id).FirstOrDefault(b => b.Id == _activeChatBookingId.Value);
+            if (booking == null)
+            {
+                MessageBox.Show("You are not a participant in this booking.");
+                return;
+            }
+
+            var msg = new ChatMessage
+            {
+                BookingId = _activeChatBookingId.Value,
+                SenderUserId = Me.Id,
+                MessageText = text,
+                CreatedUtc = DateTime.UtcNow
+            };
+            _services.Chats.Insert(msg);
+            ChatInput.Text = string.Empty;
+            RefreshChat();
         }
     }
 

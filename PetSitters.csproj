@@ -83,10 +83,12 @@
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Data\ChatRepository.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Models\ChatMessage.cs" />
     <Compile Include="Models\Enums.cs" />
     <Compile Include="Models\User.cs" />
     <Compile Include="Models\SitterProfile.cs" />

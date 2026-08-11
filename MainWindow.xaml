@@ -5,14 +5,14 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:PetSitters"
         mc:Ignorable="d"
-        Title="PetSitters" Height="640" Width="920"
+        Title="Sitters4Us" Height="640" Width="920"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource PageBg}">
     <DockPanel>
         <!-- Top app bar -->
         <Border DockPanel.Dock="Top" Background="{StaticResource Brand}" Padding="16,10">
             <Grid>
-                <TextBlock Text="🐾 PetSitters" Foreground="White" FontSize="18" FontWeight="SemiBold"
+                <TextBlock Text="🐾 Sitters4Us" Foreground="White" FontSize="18" FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
                 <StackPanel x:Name="SessionBar" Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Visibility="Collapsed">

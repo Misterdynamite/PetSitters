@@ -15,6 +15,7 @@ namespace PetSitters.Services
         public SitterProfileRepository SitterProfiles { get; }
         public PetRepository Pets { get; }
         public BookingRepository Bookings { get; }
+        public ChatRepository Chats { get; }
         public AuthService Auth { get; }
 
         /// <summary>The currently logged-in user, or null if nobody is signed in.</summary>
@@ -29,6 +30,7 @@ namespace PetSitters.Services
             SitterProfiles = new SitterProfileRepository(database);
             Pets = new PetRepository(database);
             Bookings = new BookingRepository(database);
+            Chats = new ChatRepository(database);
             Auth = new AuthService(Users);
         }
 

@@ -107,6 +107,20 @@ CREATE TABLE IF NOT EXISTS Bookings (
     FOREIGN KEY (PetId)        REFERENCES Pets(Id)  ON DELETE SET NULL
 );";
                 command.ExecuteNonQuery();
+                // Chat messages tied to a specific booking. Only the booking's owner
+                // and sitter should be able to read/write rows for that booking.
+                command.CommandText = @"
+CREATE TABLE IF NOT EXISTS ChatMessages (
+    Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    BookingId     INTEGER NOT NULL,
+    SenderUserId  INTEGER NOT NULL,
+    MessageText   TEXT    NOT NULL,
+    CreatedUtc    TEXT    NOT NULL,
+    FOREIGN KEY (BookingId)    REFERENCES Bookings(Id) ON DELETE CASCADE,
+    FOREIGN KEY (SenderUserId) REFERENCES Users(Id)    ON DELETE CASCADE
+);
+";
+                command.ExecuteNonQuery();
             }
         }
     }
