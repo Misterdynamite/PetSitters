@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Unit + component/integration tests for the PetSitters (Sitters4Us) logic layer.
+
+    These test the UI-independent code directly: Services (AuthService,
+    ValidationHelper, PasswordHasher), the domain Models, and the SQLite Data
+    repositories. This is the ENSE707 "logic/unit-test" project and is separate
+    from PetSitters.UiTests (the slower FlaUI end-to-end UI checks).
+
+    Techniques applied from the ENSE707 labs:
+      * MSTest, AAA structure, boundary + invalid-input tests        (Lab 1)
+      * Result-object assertions, quality-attribute focus            (Lab 2)
+      * Test names/categories linked to requirement IDs (traceability) (Lab 4)
+      * Equivalence partitioning, boundary-value analysis, DataRow    (Lab 5)
+      * Component/integration tests against real SQLite persistence,
+        each using an isolated temporary database file                (Lab 5)
+
+    Targets net472 to match the PetSitters app. Build/run from Visual Studio's
+    Test Explorer, or via VS MSBuild + vstest.console.exe (the classic-style
+    PetSitters app cannot be built by `dotnet` alone).
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AssemblyName>PetSitters.Tests</AssemblyName>
+    <RootNamespace>PetSitters.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.6.4" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.6.4" />
+    <!--
+      Pull in SQLite too so this project's build copies the native
+      SQLite.Interop.dll (x86/x64) into the test output, letting the
+      integration tests open a real database.
+    -->
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Reference the BUILT PetSitters app assembly so tests can use its
+      Models/Data/Services types. We reference the compiled output rather than
+      the project because PetSitters is a classic (non-SDK) WPF project that the
+      .NET SDK build cannot compile; build PetSitters first (Visual Studio, or
+      VS MSBuild) and this picks up its output. In Visual Studio's Test Explorer
+      this still works because the app is built as part of the solution.
+    -->
+    <Reference Include="PetSitters">
+      <HintPath>..\bin\$(Configuration)\PetSitters.exe</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
