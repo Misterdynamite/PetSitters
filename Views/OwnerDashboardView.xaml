@@ -109,58 +109,97 @@
                         BorderBrush="#E5E7EB" BorderThickness="1">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="SitterDetailPanel">
-                            <TextBlock x:Name="NoSitterSelected" Text="Select a sitter to see their profile and request a booking."
-                                       Foreground="{StaticResource Muted}"/>
-
+                            <TextBlock x:Name="NoSitterSelected" Text="Select a sitter to see their profile"/>
                             <StackPanel x:Name="SitterDetailContent" Visibility="Collapsed">
                                 <TextBlock x:Name="DetailName" Style="{StaticResource H1}"/>
                                 <TextBlock x:Name="DetailMeta" Foreground="{StaticResource Muted}"/>
-
-                                <TextBlock Text="About" Style="{StaticResource H2}"/>
+                                <TextBlock Text="Introduction" Style="{StaticResource FieldLabel}"/>
                                 <TextBlock x:Name="DetailBio" TextWrapping="Wrap"/>
-                                <TextBlock Text="Preferences" Style="{StaticResource H2}"/>
+                                <TextBlock Text="Preferences" Style="{StaticResource FieldLabel}"/>
                                 <TextBlock x:Name="DetailPreferences" TextWrapping="Wrap"/>
-                                <TextBlock Text="Qualifications" Style="{StaticResource H2}"/>
+                                <TextBlock Text="Qualifications" Style="{StaticResource FieldLabel}"/>
                                 <TextBlock x:Name="DetailQualifications" TextWrapping="Wrap"/>
-                                <TextBlock Text="Availability" Style="{StaticResource H2}"/>
+                                <TextBlock Text="Availability" Style="{StaticResource FieldLabel}"/>
                                 <TextBlock x:Name="DetailAvailability" TextWrapping="Wrap"/>
 
-                                <Border Background="#F0FAF7" CornerRadius="6" Padding="14" Margin="0,16,0,0"
-                                        BorderBrush="#CDEBE3" BorderThickness="1">
-                                    <StackPanel>
-                                        <TextBlock Text="Request a booking" Style="{StaticResource H2}" Margin="0,0,0,4"/>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="12"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock Text="Start date" Style="{StaticResource FieldLabel}"/>
-                                                <DatePicker x:Name="StartDatePicker"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Text="End date" Style="{StaticResource FieldLabel}"/>
-                                                <DatePicker x:Name="EndDatePicker"/>
-                                            </StackPanel>
-                                        </Grid>
+                                <TextBlock Text="Which pet?" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="BookingPetCombo" DisplayMemberPath="Name"/>
 
-                                        <TextBlock Text="Which pet?" Style="{StaticResource FieldLabel}"/>
-                                        <ComboBox x:Name="BookingPetCombo" DisplayMemberPath="Name"/>
+                                <TextBlock Text="Start date" Style="{StaticResource FieldLabel}"/>
+                                <DatePicker x:Name="StartDatePicker"/>
+                                <TextBlock Text="End date" Style="{StaticResource FieldLabel}"/>
+                                <DatePicker x:Name="EndDatePicker"/>
 
-                                        <TextBlock Text="Message to sitter" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox x:Name="BookingMessageBox" AcceptsReturn="True" TextWrapping="Wrap"
-                                                 Height="48"/>
+                                <TextBlock Text="Message to sitter" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="BookingMessageBox" AcceptsReturn="True" TextWrapping="Wrap"
+                                         Height="48"/>
 
-                                        <Button Content="Send booking request" Margin="0,12,0,0"
-                                                HorizontalAlignment="Left" Click="RequestBooking_Click"/>
-                                        <TextBlock x:Name="BookingStatus" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                                    </StackPanel>
-                                </Border>
+                                <Button Content="Send booking request" Margin="0,12,0,0"
+                                        HorizontalAlignment="Left" Click="RequestBooking_Click"/>
+                                <TextBlock x:Name="BookingStatus" TextWrapping="Wrap" Margin="0,8,0,0"/>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- Chat tab for owners: list of accepted bookings and per-booking chat -->
+        <TabItem Header="Chats">
+            <Grid Margin="0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="340"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Active chats (accepted bookings)" Style="{StaticResource H1}"/>
+                        <ListView x:Name="ChatsList" BorderThickness="0" SelectionChanged="ChatsList_SelectionChanged">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="With" DisplayMemberBinding="{Binding SitterName}" Width="150"/>
+                                    <GridViewColumn Header="Dates" DisplayMemberBinding="{Binding DateRange}" Width="160"/>
+                                    <GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" Width="80"/>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Selected chat" Style="{StaticResource H2}"/>
+                        <TextBlock x:Name="ChatSelectedDetails" TextWrapping="Wrap" Text="Select a chat to open."/>
+                        <Button Content="Open chat" Margin="0,12,0,0" Click="OpenChat_Click"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </TabItem>
+
+        <!-- Chat panel: shown when a specific booking chat is opened -->
+        <TabItem Header="Chat" x:Name="ChatTab" Visibility="Collapsed">
+            <Grid Margin="0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
+                        BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
+                    <ScrollViewer x:Name="ChatScroll" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="ChatMessagesList">
+                            <!-- Items bound programmatically -->
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBox x:Name="ChatInput" Width="680" Height="36"/>
+                    <Button Content="Send" Margin="8,0,0,0" Width="80" Click="ChatSend_Click"/>
+                </StackPanel>
             </Grid>
         </TabItem>
 

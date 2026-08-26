@@ -28,6 +28,7 @@ namespace PetSitters.Views
             LoadPets();
             LoadSitters();
             LoadBookings();
+            LoadChats();
         }
 
         private User Me => _services.CurrentUser;
@@ -235,6 +236,120 @@ namespace PetSitters.Views
                 rows.Add(new OwnerBookingRow(b, sitter?.FullName ?? "(unknown)", petName));
             }
             BookingsList.ItemsSource = rows;
+            // Keep chats list in sync with bookings view
+            LoadChats();
+        }
+
+        // ---- Chats for owner (and owners who are also sitters) ------------------
+        private void LoadChats()
+        {
+            var rows = new List<OwnerBookingRow>();
+            // Accepted bookings where current user is the owner
+            foreach (Booking b in _services.Bookings.GetForOwner(Me.Id).Where(b => b.Status == PetSitters.Models.BookingStatus.Accepted))
+            {
+                User sitter = _services.Users.FindById(b.SitterUserId);
+                string petName = "All my pets";
+                if (b.PetId.HasValue)
+                {
+                    Pet p = _services.Pets.GetByOwner(Me.Id).FirstOrDefault(x => x.Id == b.PetId.Value);
+                    petName = p?.Name ?? "(removed pet)";
+                }
+                rows.Add(new OwnerBookingRow(b, sitter?.FullName ?? "(unknown)", petName));
+            }
+            // Also include bookings where current user is the sitter and another user is the owner
+            foreach (Booking b in _services.Bookings.GetForSitter(Me.Id).Where(b => b.Status == PetSitters.Models.BookingStatus.Accepted))
+            {
+                User owner = _services.Users.FindById(b.OwnerUserId);
+                string petName = "All my pets";
+                if (b.PetId.HasValue)
+                {
+                    Pet p = _services.Pets.GetByOwner(b.OwnerUserId).FirstOrDefault(x => x.Id == b.PetId.Value);
+                    petName = p?.Name ?? "(removed pet)";
+                }
+                // Reuse OwnerBookingRow to show counterpart name in SitterName column
+                rows.Add(new OwnerBookingRow(b, owner?.FullName ?? "(unknown)", petName));
+            }
+            ChatsList.ItemsSource = rows;
+            ChatSelectedDetails.Text = "Select a chat to open.";
+        }
+
+        private void ChatsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ChatsList.SelectedItem is OwnerBookingRow row)
+            {
+                ChatSelectedDetails.Text = $"With: {row.SitterName}\nDates: {row.DateRange}\nStatus: {row.Status}";
+            }
+        }
+
+        private void OpenChat_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(ChatsList.SelectedItem is OwnerBookingRow row))
+            {
+                MessageBox.Show("Select a chat first.");
+                return;
+            }
+            ShowChatForBooking(row.BookingId);
+        }
+
+        private int? _activeChatBookingId;
+
+        private void ShowChatForBooking(int bookingId)
+        {
+            var booking = _services.Bookings.GetForOwner(Me.Id).FirstOrDefault(b => b.Id == bookingId)
+                          ?? _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == bookingId);
+            if (booking == null)
+            {
+                MessageBox.Show("You are not a participant in this booking.");
+                return;
+            }
+
+            _activeChatBookingId = bookingId;
+            ChatTab.Visibility = Visibility.Visible;
+            RefreshChat();
+            ChatTab.IsSelected = true;
+        }
+
+        private void RefreshChat()
+        {
+            if (!_activeChatBookingId.HasValue) return;
+            var messages = _services.Chats.GetForBooking(_activeChatBookingId.Value);
+            ChatMessagesList.Items.Clear();
+            foreach (var m in messages)
+            {
+                var text = new TextBlock { Text = $"{(_services.Users.FindById(m.SenderUserId)?.FullName ?? "Unknown")}: {m.MessageText}", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,4,0,4) };
+                ChatMessagesList.Items.Add(text);
+            }
+            ChatScroll.ScrollToEnd();
+        }
+
+        private void ChatSend_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_activeChatBookingId.HasValue)
+            {
+                MessageBox.Show("No chat is open.");
+                return;
+            }
+            var text = ChatInput.Text?.Trim();
+            if (string.IsNullOrEmpty(text)) return;
+
+            var booking = _services.Bookings.GetForOwner(Me.Id).FirstOrDefault(b => b.Id == _activeChatBookingId.Value)
+                          ?? _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == _activeChatBookingId.Value);
+            if (booking == null)
+            {
+                MessageBox.Show("You are not a participant in this booking.");
+                return;
+            }
+
+            var msg = new ChatMessage
+            {
+                BookingId = _activeChatBookingId.Value,
+                SenderUserId = Me.Id,
+                MessageText = text,
+                CreatedUtc = DateTime.UtcNow
+            };
+            _services.Chats.Insert(msg);
+            ChatInput.Text = string.Empty;
+            RefreshChat();
         }
 
         private static string Fallback(string value, string ifEmpty)
@@ -287,6 +402,7 @@ namespace PetSitters.Views
     /// <summary>Display row for the owner's bookings list (FR-6).</summary>
     public class OwnerBookingRow
     {
+        public int BookingId { get; }
         public string SitterName { get; }
         public string PetName { get; }
         public string DateRange { get; }
@@ -296,6 +412,7 @@ namespace PetSitters.Views
 
         public OwnerBookingRow(Booking b, string sitterName, string petName)
         {
+            BookingId = b.Id;
             SitterName = sitterName;
             PetName = petName;
             DateRange = b.StartDate.ToString("d MMM yyyy") + " – " + b.EndDate.ToString("d MMM yyyy");
