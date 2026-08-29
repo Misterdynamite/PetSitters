@@ -61,6 +61,40 @@ namespace PetSitters.Tests
             Assert.IsFalse(result.Success);
         }
 
+        [DataTestMethod]
+        [DataRow("")]
+        [DataRow("   ")]
+        public void Register_WithEmptyPhone_Fails(string phone)
+        {
+            // All registration fields are required.
+            AuthResult result = Services.Auth.Register("olivia@test.com", "secret1", UserRole.Owner,
+                "Olivia Owner", phone, "Wellington");
+
+            Assert.IsFalse(result.Success);
+        }
+
+        [DataTestMethod]
+        [DataRow("")]
+        [DataRow("   ")]
+        public void Register_WithEmptyLocation_Fails(string location)
+        {
+            AuthResult result = Services.Auth.Register("olivia@test.com", "secret1", UserRole.Owner,
+                "Olivia Owner", "021", location);
+
+            Assert.IsFalse(result.Success);
+        }
+
+        [TestMethod]
+        public void Register_WithAllFieldsSupplied_PersistsPhoneAndLocation()
+        {
+            AuthResult result = RegisterOwner();
+
+            User stored = Services.Users.FindByEmail("olivia@test.com");
+            Assert.IsTrue(result.Success);
+            Assert.AreEqual("0210000000", stored.Phone);
+            Assert.AreEqual("Wellington", stored.Location);
+        }
+
         [TestMethod]
         public void Register_DuplicateEmail_Fails_CaseInsensitive()
         {

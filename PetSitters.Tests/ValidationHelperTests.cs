@@ -71,6 +71,35 @@ namespace PetSitters.Tests
                 Assert.IsTrue(rate >= 0m);
         }
 
+        // ---- Pet age (months): optional, whole number, boundary 0-11 ----
+        [DataTestMethod]
+        [DataRow("", true, 0)]      // blank -> optional, treated as 0 months
+        [DataRow("   ", true, 0)]   // whitespace -> also treated as not supplied
+        [DataRow("0", true, 0)]     // lower boundary
+        [DataRow("1", true, 1)]     // just inside the lower boundary
+        [DataRow("11", true, 11)]   // upper boundary (12 would be another year)
+        [DataRow("12", false, 0)]   // just outside the upper boundary
+        [DataRow("-1", false, 0)]   // just below the lower boundary
+        [DataRow("6.5", false, 0)]  // not a whole number
+        [DataRow("six", false, 0)]  // not a number
+        public void TryParseAgeMonths_AcceptsBlankOrZeroToEleven(string text, bool expectedOk, int expectedMonths)
+        {
+            bool ok = ValidationHelper.TryParseAgeMonths(text, out int months);
+
+            Assert.AreEqual(expectedOk, ok);
+            if (expectedOk)
+                Assert.AreEqual(expectedMonths, months);
+        }
+
+        [TestMethod]
+        public void TryParseAgeMonths_TreatsNullAsNotSupplied()
+        {
+            bool ok = ValidationHelper.TryParseAgeMonths(null, out int months);
+
+            Assert.IsTrue(ok);
+            Assert.AreEqual(0, months);
+        }
+
         // ---- Age / years of experience: whole number, zero-or-greater ----
         [DataTestMethod]
         [DataRow("0", true)]        // boundary

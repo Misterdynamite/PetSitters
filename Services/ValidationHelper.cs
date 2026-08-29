@@ -41,5 +41,24 @@ namespace PetSitters.Services
         {
             return int.TryParse(text, out value) && value >= 0;
         }
+
+        /// <summary>Upper bound for the optional "months" part of a pet's age.</summary>
+        public const int MaxAgeMonths = 11;
+
+        /// <summary>
+        /// Parses the optional months part of a pet's age. Blank means "not
+        /// supplied" and yields 0. Anything supplied must be a whole number in
+        /// the range 0-11, because 12 months would be another whole year.
+        /// </summary>
+        public static bool TryParseAgeMonths(string text, out int months)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                months = 0;
+                return true;
+            }
+
+            return int.TryParse(text.Trim(), out months) && months >= 0 && months <= MaxAgeMonths;
+        }
     }
 }

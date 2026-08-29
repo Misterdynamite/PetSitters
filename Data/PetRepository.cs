@@ -21,14 +21,15 @@ namespace PetSitters.Data
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = @"
-INSERT INTO Pets (OwnerUserId, Name, Species, Breed, Age, Notes)
-VALUES (@owner, @name, @species, @breed, @age, @notes);
+INSERT INTO Pets (OwnerUserId, Name, Species, Breed, Age, AgeMonths, Notes)
+VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @notes);
 SELECT last_insert_rowid();";
                 command.Parameters.AddWithValue("@owner", pet.OwnerUserId);
                 command.Parameters.AddWithValue("@name", pet.Name);
                 command.Parameters.AddWithValue("@species", (object)pet.Species ?? DBNull.Value);
                 command.Parameters.AddWithValue("@breed", (object)pet.Breed ?? DBNull.Value);
                 command.Parameters.AddWithValue("@age", pet.Age);
+                command.Parameters.AddWithValue("@ageMonths", pet.AgeMonths);
                 command.Parameters.AddWithValue("@notes", (object)pet.Notes ?? DBNull.Value);
                 pet.Id = Convert.ToInt32(command.ExecuteScalar());
                 return pet;
@@ -73,6 +74,7 @@ SELECT last_insert_rowid();";
                 Species = reader["Species"] as string,
                 Breed = reader["Breed"] as string,
                 Age = Convert.ToInt32(reader["Age"]),
+                AgeMonths = Convert.ToInt32(reader["AgeMonths"]),
                 Notes = reader["Notes"] as string
             };
         }

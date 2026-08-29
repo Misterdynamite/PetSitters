@@ -340,7 +340,7 @@ namespace PetSitters.Views
                 PetSummary = pet.Name;
                 PetSpecies = Or(pet.Species, "Not specified");
                 PetBreed = Or(pet.Breed, "Not specified");
-                PetAge = pet.Age + " year(s)";
+                PetAge = pet.AgeDisplay;
                 PetNotes = Or(pet.Notes, "None provided");
             }
             else

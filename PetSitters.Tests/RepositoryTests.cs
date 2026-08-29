@@ -117,6 +117,35 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        public void Insert_PersistsYearsAndOptionalMonths()
+        {
+            GivenAnOwner();
+            Services.Pets.Insert(new Pet
+            {
+                OwnerUserId = _ownerId,
+                Name = "Milo",
+                Species = "Cat",
+                Age = 2,
+                AgeMonths = 7
+            });
+
+            Pet stored = Services.Pets.GetByOwner(_ownerId)[0];
+            Assert.AreEqual(2, stored.Age);
+            Assert.AreEqual(7, stored.AgeMonths);
+            Assert.AreEqual("2 years 7 months", stored.AgeDisplay);
+        }
+
+        [TestMethod]
+        public void Insert_DefaultsMonthsToZero_WhenNotSupplied()
+        {
+            GivenAnOwner();
+            AddPet("Rex"); // AddPet supplies years only
+
+            Pet stored = Services.Pets.GetByOwner(_ownerId)[0];
+            Assert.AreEqual(0, stored.AgeMonths);
+        }
+
+        [TestMethod]
         public void Delete_RemovesOnlyTheSelectedPet()
         {
             GivenAnOwner();

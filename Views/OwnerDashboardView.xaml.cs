@@ -76,7 +76,13 @@ namespace PetSitters.Views
             }
             if (!ValidationHelper.TryParseNonNegativeInt(PetAgeBox.Text, out int age))
             {
-                PetStatus.Text = "Age must be a whole number (0 or more).";
+                PetStatus.Text = "Age in years must be a whole number (0 or more).";
+                return;
+            }
+            // Months are optional; when supplied they must be 0-11 (12 = another year).
+            if (!ValidationHelper.TryParseAgeMonths(PetAgeMonthsBox.Text, out int ageMonths))
+            {
+                PetStatus.Text = $"Months must be a whole number between 0 and {ValidationHelper.MaxAgeMonths}, or left blank.";
                 return;
             }
 
@@ -87,6 +93,7 @@ namespace PetSitters.Views
                 Species = PetSpeciesBox.Text.Trim(),
                 Breed = PetBreedBox.Text.Trim(),
                 Age = age,
+                AgeMonths = ageMonths,
                 Notes = PetNotesBox.Text.Trim()
             });
 
@@ -94,6 +101,7 @@ namespace PetSitters.Views
             PetSpeciesBox.Clear();
             PetBreedBox.Clear();
             PetAgeBox.Text = "0";
+            PetAgeMonthsBox.Clear();
             PetNotesBox.Clear();
 
             LoadPets();

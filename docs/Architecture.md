@@ -150,7 +150,8 @@ erDiagram
         string Name
         string Species
         string Breed
-        int Age
+        int Age "whole years"
+        int AgeMonths "optional 0-11"
         string Notes
     }
     Bookings {
@@ -181,7 +182,19 @@ Notes:
   owner's estimated cost is stable even if the sitter later changes their rate.
 - **Foreign keys are enforced** (`ForeignKeys=True`), with `ON DELETE CASCADE`
   (and `SET NULL` for a booking's optional pet).
+- **Pet age** is stored as whole years (`Age`, required) plus optional months
+  (`AgeMonths`, 0–11). `Pet.AgeDisplay` renders the pair for the UI
+  (e.g. "2 years 3 months", "5 months").
 - Dates are stored as ISO-8601 round-trip strings.
+
+### Schema migrations
+
+`CREATE TABLE IF NOT EXISTS` only shapes a *new* database, so columns added after
+a release are patched into existing files by `Database.ApplyMigrations()`, which
+runs at the end of `Initialize()`. Each step checks `PRAGMA table_info` first and
+is safe to re-run (e.g. `Pets.AgeMonths` is added via `ALTER TABLE` when missing,
+defaulting existing pets to 0 months). Add new column changes there so existing
+`petsitters.db` files keep working.
 - Enums live in `Models/Enums.cs`: `UserRole`, `BookingStatus`.
 
 ### Repositories
@@ -202,9 +215,10 @@ One repository per aggregate, each taking the `Database`:
 
 ### Account creation & login (FR-A1 / FR-A2)
 
-`AuthService.Register` validates input (email format, password ≥ 6 chars, required
-name), rejects duplicate emails (case-insensitive), hashes the password, and
-inserts the user. `AuthService.Login` verifies the password hash and returns the
+`AuthService.Register` validates input — **all registration fields are required**:
+a valid email, a password of at least 6 characters, full name, phone, and
+location. It then rejects duplicate emails (case-insensitive), hashes the
+password, and inserts the user. `AuthService.Login` verifies the password hash and returns the
 same error for "unknown email" and "wrong password" (no user enumeration). Both
 return an `AuthResult` (`Success` / `ErrorMessage` / `User`).
 

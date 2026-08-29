@@ -22,8 +22,11 @@ namespace PetSitters.Services
         public AuthResult Register(string email, string password, UserRole role,
             string fullName, string phone, string location)
         {
+            // Every field on the registration form is required.
             email = (email ?? string.Empty).Trim();
             fullName = (fullName ?? string.Empty).Trim();
+            phone = (phone ?? string.Empty).Trim();
+            location = (location ?? string.Empty).Trim();
 
             if (!ValidationHelper.IsValidEmail(email))
                 return AuthResult.Fail("Please enter a valid email address.");
@@ -33,6 +36,12 @@ namespace PetSitters.Services
 
             if (!ValidationHelper.IsNonEmpty(fullName))
                 return AuthResult.Fail("Please enter your full name.");
+
+            if (!ValidationHelper.IsNonEmpty(phone))
+                return AuthResult.Fail("Please enter your phone number.");
+
+            if (!ValidationHelper.IsNonEmpty(location))
+                return AuthResult.Fail("Please enter your location (suburb / city).");
 
             if (_users.EmailExists(email))
                 return AuthResult.Fail("An account with that email already exists.");
@@ -46,8 +55,8 @@ namespace PetSitters.Services
                 PasswordSalt = salt,
                 Role = role,
                 FullName = fullName,
-                Phone = (phone ?? string.Empty).Trim(),
-                Location = (location ?? string.Empty).Trim(),
+                Phone = phone,
+                Location = location,
                 CreatedUtc = DateTime.UtcNow
             };
 
