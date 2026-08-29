@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using FlaUI.Core;
+using FlaUI.Core.Capturing;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Input;
@@ -24,15 +25,36 @@ namespace PetSitters.UiTests
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
+        /// <summary>
+        /// How long to let WPF settle after moving keyboard focus, before sending
+        /// keystrokes. Fixed on purpose: correctness must not depend on the
+        /// cosmetic <see cref="ActionDelay"/>.
+        /// </summary>
+        private static readonly TimeSpan FocusSettle = TimeSpan.FromMilliseconds(200);
+
         private readonly Application _app;
         private readonly UIA3Automation _automation;
         private readonly Window _window;
 
         /// <summary>
         /// A pause added after every input/click/tab action so the run is easy to
-        /// follow by eye. Set to <see cref="TimeSpan.Zero"/> for a fast, silent run.
+        /// follow by eye. Defaults to 700 ms, or the value of the
+        /// <c>PETSITTERS_UI_DELAY_MS</c> environment variable when set - use
+        /// <c>0</c> for a fast regression run, or a larger value for a demo.
         /// </summary>
-        public TimeSpan ActionDelay { get; set; } = TimeSpan.FromMilliseconds(700);
+        public TimeSpan ActionDelay { get; set; } = DefaultActionDelay();
+
+        private static TimeSpan DefaultActionDelay()
+        {
+            string configured = Environment.GetEnvironmentVariable("PETSITTERS_UI_DELAY_MS");
+            if (!string.IsNullOrWhiteSpace(configured) &&
+                int.TryParse(configured, out int milliseconds) && milliseconds >= 0)
+            {
+                return TimeSpan.FromMilliseconds(milliseconds);
+            }
+
+            return TimeSpan.FromMilliseconds(700);
+        }
 
         /// <summary>Launches PetSitters.exe and waits for its main window.</summary>
         public PetSittersDriver(string executablePath)
@@ -90,8 +112,25 @@ namespace PetSitters.UiTests
         public void EnterPassword(string automationId, string value)
         {
             AutomationElement box = ByName(automationId);
-            box.Focus();
+
+            // Keystrokes land wherever keyboard focus happens to be, and a
+            // programmatic Focus() is not reliably honoured here (on the register
+            // form, focus stayed on the previously activated control and the
+            // password silently went nowhere). So click the box the way a user
+            // would, and confirm it actually holds keyboard focus before typing.
+            bool focused = Retry.WhileFalse(() =>
+            {
+                box.Click();
+                Wait.UntilInputIsProcessed();
+                Thread.Sleep(FocusSettle);
+                return box.Properties.HasKeyboardFocus.ValueOrDefault;
+            }, Timeout).Result;
+
+            if (!focused)
+                throw new InvalidOperationException("Could not give keyboard focus to '" + automationId + "' to type into it.");
+
             Keyboard.Type(value);
+            Wait.UntilInputIsProcessed();
             Pause();
         }
 
@@ -160,6 +199,28 @@ namespace PetSitters.UiTests
             return ByName(automationId).Name;
         }
 
+        /// <summary>
+        /// Reads a control's text, or returns null if it is not on screen. Used to
+        /// enrich failure messages (e.g. surfacing a validation error) without
+        /// making the assertion itself depend on the control being present.
+        /// </summary>
+        public string TryReadText(string automationId)
+        {
+            return Retry.WhileNull(
+                () => _window.FindFirstDescendant(cf => cf.ByAutomationId(automationId)),
+                TimeSpan.FromSeconds(1)).Result?.Name;
+        }
+
+        /// <summary>
+        /// Counts the rows currently in a list/list-view. Used to assert that a
+        /// list has emptied, so it deliberately does not retry-until-non-empty.
+        /// The list's tab must be selected, or WPF will not have realised it.
+        /// </summary>
+        public int CountListItems(string automationId)
+        {
+            return ByName(automationId).AsListBox().Items.Length;
+        }
+
         // ---- dialogs ---------------------------------------------------------
 
         /// <summary>Waits for a dialog window whose title contains the given text.</summary>
@@ -221,6 +282,27 @@ namespace PetSitters.UiTests
 
             button.AsButton().Invoke();
             Pause();
+        }
+
+        // ---- diagnostics -----------------------------------------------------
+
+        /// <summary>
+        /// Saves a PNG of the app window (falling back to the whole screen) so a
+        /// failed run can be diagnosed after the fact - including the common case
+        /// of someone using the mouse or keyboard while the test was driving the
+        /// desktop, which steals focus and derails the run.
+        /// </summary>
+        public void CaptureScreenshot(string filePath)
+        {
+            try
+            {
+                Capture.Element(_window).ToFile(filePath);
+            }
+            catch
+            {
+                // The window may already be gone; a full-screen grab still helps.
+                Capture.Screen().ToFile(filePath);
+            }
         }
 
         /// <summary>Waits <see cref="ActionDelay"/> so the run is easy to watch.</summary>

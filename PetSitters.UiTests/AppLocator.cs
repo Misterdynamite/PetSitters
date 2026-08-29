@@ -62,14 +62,43 @@ namespace PetSitters.UiTests
         /// Deletes the live database (and any SQLite side-car files) so the next
         /// app launch recreates an empty schema. Safe to call when the file does
         /// not exist yet.
+        ///
+        /// This clean-slate step is a core part of the regression suite: every test
+        /// must start from a known-empty system, otherwise data left behind by an
+        /// earlier run (duplicate emails, stale bookings) silently changes what the
+        /// UI shows and the results stop meaning anything. It therefore verifies
+        /// the delete rather than failing quietly.
         /// </summary>
+        /// <exception cref="IOException">
+        /// The database could not be removed - most often because a PetSitters.exe
+        /// from a previous run is still holding it open.
+        /// </exception>
         public static void WipeDatabase()
         {
             string db = DatabasePath();
+
             foreach (string path in new[] { db, db + "-wal", db + "-shm", db + "-journal" })
             {
-                if (File.Exists(path))
+                if (!File.Exists(path))
+                    continue;
+
+                try
+                {
                     File.Delete(path);
+                }
+                catch (IOException ex)
+                {
+                    throw new IOException(
+                        "Could not delete '" + path + "' to start the regression run from a clean database. " +
+                        "A PetSitters.exe from a previous run is probably still running - close it and retry.", ex);
+                }
+            }
+
+            // Verify, so a silent failure can never let a test run against stale data.
+            if (File.Exists(db))
+            {
+                throw new IOException(
+                    "The database at '" + db + "' still exists after the wipe; refusing to run against stale data.");
             }
         }
     }
