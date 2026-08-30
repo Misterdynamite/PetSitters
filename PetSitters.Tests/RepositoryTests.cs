@@ -47,6 +47,7 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        // FR-01
         public void GetByRole_ReturnsOnlyThatRole_OrderedByName()
         {
             NewUser("sitter-b@test.com", UserRole.Sitter, "Bob");
@@ -61,6 +62,7 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        // FR-02
         public void UpdateDetails_PersistsEditedFields()
         {
             User user = NewUser("a@test.com", UserRole.Owner, "Alice");
