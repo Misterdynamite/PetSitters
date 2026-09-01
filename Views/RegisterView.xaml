@@ -10,7 +10,7 @@
                 BorderBrush="#E5E7EB" BorderThickness="1">
             <StackPanel>
                 <TextBlock Text="Create your account" Style="{StaticResource H1}"/>
-                <TextBlock Text="Tell us who you are. You can update details later."
+                <TextBlock Text="Tell us who you are. All fields are required."
                            Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
 
                 <TextBlock Text="I want to..." Style="{StaticResource FieldLabel}"/>
@@ -20,19 +20,19 @@
                     <RadioButton x:Name="SitterRadio" Content="Offer sitting (Sitter)" GroupName="Role"/>
                 </StackPanel>
 
-                <TextBlock Text="Full name" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Full name *" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="NameBox"/>
 
-                <TextBlock Text="Email" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Email *" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="EmailBox"/>
 
-                <TextBlock Text="Password (min 6 characters)" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Password * (min 6 characters)" Style="{StaticResource FieldLabel}"/>
                 <PasswordBox x:Name="PasswordBox"/>
 
-                <TextBlock Text="Phone" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Phone *" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="PhoneBox"/>
 
-                <TextBlock Text="Location (suburb / city)" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="Location (suburb / city) *" Style="{StaticResource FieldLabel}"/>
                 <TextBox x:Name="LocationBox"/>
 
                 <TextBlock x:Name="ErrorText" Foreground="{StaticResource Danger}" TextWrapping="Wrap"

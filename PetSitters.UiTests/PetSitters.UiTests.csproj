@@ -1,17 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Automated end-to-end UI tests for the PetSitters WPF app.
+    End-to-end UI REGRESSION tests for the PetSitters (Sitters4Us) WPF app.
 
     These drive the *real* built PetSitters.exe through the Windows UI Automation
     layer (via FlaUI) - clicking buttons, typing into boxes and reading labels
-    exactly as a human would. This is deliberately separate from the assignment's
-    logic/unit-test project: it is a slower, end-to-end "does the whole app hang
-    together" check.
+    exactly as a human would. They are the outermost layer of the test pyramid and
+    are deliberately separate from PetSitters.Tests (the fast logic/unit +
+    persistence tests).
 
-    Targets net472 to match the PetSitters app. Run it from Visual Studio's Test
-    Explorer (Test > Run All Tests) - a full MSBuild/desktop session is required
-    because the tests launch a windowed application.
+    Their regression job is to catch breakages that unit tests cannot see: view
+    wiring, navigation between screens, and cross-role workflows. Notably FR-S3
+    (sitter views full job details before deciding) is UI-only presentation, so
+    this project is its ONLY automated coverage.
+
+    Targets net472 to match the PetSitters app.
+
+    IMPORTANT - build order: like PetSitters.Tests, this project does NOT use a
+    <ProjectReference> to PetSitters.csproj, because the .NET SDK cannot build
+    that classic (non-SDK) WPF project. Build the app first with Visual Studio /
+    VS MSBuild, then build+run these tests. The app is launched as a process
+    (located at runtime by AppLocator), so no assembly reference is needed at all.
   -->
 
   <PropertyGroup>
@@ -32,19 +41,6 @@
     <PackageReference Include="MSTest.TestFramework" Version="3.6.4" />
     <PackageReference Include="FlaUI.Core" Version="4.0.0" />
     <PackageReference Include="FlaUI.UIA3" Version="4.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!--
-      Build-order dependency only: this forces the PetSitters app to be built
-      before the tests run, but does NOT copy its assemblies into the test
-      output. The tests launch PetSitters.exe from its own bin folder (where its
-      native SQLite interop DLLs live), located at runtime by AppLocator.
-    -->
-    <ProjectReference Include="..\PetSitters.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-      <Private>false</Private>
-    </ProjectReference>
   </ItemGroup>
 
 </Project>

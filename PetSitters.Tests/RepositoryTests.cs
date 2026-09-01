@@ -47,6 +47,7 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        // FR-01
         public void GetByRole_ReturnsOnlyThatRole_OrderedByName()
         {
             NewUser("sitter-b@test.com", UserRole.Sitter, "Bob");
@@ -61,6 +62,7 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        // FR-02
         public void UpdateDetails_PersistsEditedFields()
         {
             User user = NewUser("a@test.com", UserRole.Owner, "Alice");
@@ -114,6 +116,35 @@ namespace PetSitters.Tests
             Assert.AreEqual(2, pets.Count);
             // Ordered by name: Bella before Rex.
             Assert.AreEqual("Bella", pets[0].Name);
+        }
+
+        [TestMethod]
+        public void Insert_PersistsYearsAndOptionalMonths()
+        {
+            GivenAnOwner();
+            Services.Pets.Insert(new Pet
+            {
+                OwnerUserId = _ownerId,
+                Name = "Milo",
+                Species = "Cat",
+                Age = 2,
+                AgeMonths = 7
+            });
+
+            Pet stored = Services.Pets.GetByOwner(_ownerId)[0];
+            Assert.AreEqual(2, stored.Age);
+            Assert.AreEqual(7, stored.AgeMonths);
+            Assert.AreEqual("2 years 7 months", stored.AgeDisplay);
+        }
+
+        [TestMethod]
+        public void Insert_DefaultsMonthsToZero_WhenNotSupplied()
+        {
+            GivenAnOwner();
+            AddPet("Rex"); // AddPet supplies years only
+
+            Pet stored = Services.Pets.GetByOwner(_ownerId)[0];
+            Assert.AreEqual(0, stored.AgeMonths);
         }
 
         [TestMethod]

@@ -46,6 +46,7 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        // FR-06
         public void Message_IsPersisted_AndReadBackByAFreshRepository()
         {
             int bookingId = NewAcceptedBooking();

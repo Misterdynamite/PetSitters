@@ -8,7 +8,7 @@ requirements traceability matrix, and how to run everything.
 - **What it tests:** the UI-independent logic layer — `Services` (`AuthService`,
   `ValidationHelper`, `PasswordHasher`), the domain `Models`, and the SQLite
   `Data` repositories.
-- **Result:** **39 test methods → 75 executed cases** (the difference is
+- **Result:** **48 test methods → 102 executed cases** (the difference is
   `[DataRow]` data-driven expansion). All passing.
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
   `PetSitters.UiTests` (FlaUI) project.
@@ -65,7 +65,7 @@ app, so they can run in any order (or in parallel) safely.
 | `Verify_WithTamperedHash_ReturnsFalse` | A modified hash fails verification. |
 | `Verify_WithMissingStoredHashOrSalt_ReturnsFalse` `[DataRow ×2]` | A row with no credentials cannot authenticate. |
 
-#### `ValidationHelperTests` — 5 methods / 30 cases · data quality · FR-A1, FR-O3, FR-S2
+#### `ValidationHelperTests` — 7 methods / 40 cases · data quality · FR-A1, FR-O3, FR-S2
 | Test | Technique | Cases |
 |------|-----------|-------|
 | `IsValidEmail_ClassifiesInputCorrectly` | Equivalence partitioning (valid vs. empty / no-@ / no-domain / no-local / spaces) | 9 |
@@ -73,6 +73,15 @@ app, so they can run in any order (or in parallel) safely.
 | `IsNonEmpty_DetectsBlankValues` | null / whitespace / empty vs. real value | 4 |
 | `TryParseRate_AcceptsOnlyNonNegativeNumbers` | Boundary at 0; rejects negatives and non-numbers | 7 |
 | `TryParseNonNegativeInt_AcceptsOnlyWholeNonNegativeNumbers` | Whole-number, non-negative rule | 6 |
+| `TryParseAgeMonths_AcceptsBlankOrZeroToEleven` | Boundary-value analysis on the optional months field (−1/0 … 11/12) | 9 |
+| `TryParseAgeMonths_TreatsNullAsNotSupplied` | Optional field defaults to 0 | 1 |
+
+#### `PetAgeTests` — 3 methods / 10 cases · FR-O3
+| Test | What it verifies | Cases |
+|------|------------------|-------|
+| `FormatAge_CombinesYearsAndMonths` | Years + optional months render correctly, incl. singular/plural ("1 year 1 month") and the 0/0 "Under 1 month" case | 8 |
+| `AgeDisplay_UsesTheStoredYearsAndMonths` | A pet's display string reflects its stored age | 1 |
+| `AgeMonths_DefaultsToZero_WhenNotSupplied` | Months are optional | 1 |
 
 #### `BookingCalculationTests` — 2 methods / 8 cases · FR-O4
 | Test | Technique | Cases |
@@ -82,13 +91,16 @@ app, so they can run in any order (or in parallel) safely.
 
 ### Component / integration tests (real isolated SQLite)
 
-#### `AuthServiceTests` — 10 methods / 14 cases · FR-A1, FR-A2
+#### `AuthServiceTests` — 13 methods / 19 cases · FR-A1, FR-A2
 | Test | What it verifies |
 |------|------------------|
 | `Register_WithValidDetails_Succeeds` | Valid registration creates a user with a DB id and correct role. |
 | `Register_WithInvalidEmail_Fails` `[DataRow ×3]` | Bad email formats are rejected. |
 | `Register_WithWeakPassword_Fails` | Sub-6-character password is rejected (boundary). |
 | `Register_WithEmptyName_Fails` | Blank full name is rejected. |
+| `Register_WithEmptyPhone_Fails` `[DataRow ×2]` | Phone is a **required** field. |
+| `Register_WithEmptyLocation_Fails` `[DataRow ×2]` | Location is a **required** field. |
+| `Register_WithAllFieldsSupplied_PersistsPhoneAndLocation` | All supplied details are stored. |
 | `Register_DuplicateEmail_Fails_CaseInsensitive` | A duplicate email (different casing) is rejected. |
 | `Register_StoresHashedPassword_NotPlainText` | The persisted row stores a hash + salt, not the password. |
 | `Login_WithCorrectCredentials_Succeeds` | Correct credentials log in. |
@@ -104,10 +116,12 @@ app, so they can run in any order (or in parallel) safely.
 | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | Browsing sitters returns only sitters, name-ordered. |
 | `UpdateDetails_PersistsEditedFields` | Edited personal details are saved. |
 
-#### `PetRepositoryTests` — 2 methods · FR-O3
+#### `PetRepositoryTests` — 4 methods · FR-O3
 | Test | What it verifies |
 |------|------------------|
 | `Insert_ThenGetByOwner_ReturnsThePets` | An owner's pets are stored and returned (name-ordered). |
+| `Insert_PersistsYearsAndOptionalMonths` | Both age parts round-trip through SQLite. |
+| `Insert_DefaultsMonthsToZero_WhenNotSupplied` | Omitting months stores 0. |
 | `Delete_RemovesOnlyTheSelectedPet` | Deleting one pet leaves the others intact. |
 
 #### `SitterProfileRepositoryTests` — 3 methods · FR-S2

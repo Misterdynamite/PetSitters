@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS Pets (
     Species      TEXT,
     Breed        TEXT,
     Age          INTEGER NOT NULL DEFAULT 0,
+    AgeMonths    INTEGER NOT NULL DEFAULT 0,
     Notes        TEXT,
     FOREIGN KEY (OwnerUserId) REFERENCES Users(Id) ON DELETE CASCADE
 );
@@ -122,6 +123,48 @@ CREATE TABLE IF NOT EXISTS ChatMessages (
 ";
                 command.ExecuteNonQuery();
             }
+
+            ApplyMigrations();
+        }
+
+        /// <summary>
+        /// Brings an existing database up to date. "CREATE TABLE IF NOT EXISTS"
+        /// only helps on a fresh file, so columns added after a release must be
+        /// patched in here. Every step is idempotent and safe to re-run.
+        /// </summary>
+        private void ApplyMigrations()
+        {
+            // Pets.AgeMonths: added when pet age became "years + optional months".
+            // Existing rows default to 0 months, preserving their recorded years.
+            if (!ColumnExists("Pets", "AgeMonths"))
+            {
+                using (var connection = OpenConnection())
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "ALTER TABLE Pets ADD COLUMN AgeMonths INTEGER NOT NULL DEFAULT 0;";
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        /// <summary>True if the given table already has the given column.</summary>
+        private bool ColumnExists(string table, string column)
+        {
+            using (var connection = OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                // Table name is a hard-coded literal from our own schema, never user input.
+                command.CommandText = "PRAGMA table_info(" + table + ");";
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        if (string.Equals(reader["name"] as string, column, StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                }
+            }
+            return false;
         }
     }
 }

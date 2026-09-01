@@ -46,7 +46,7 @@
                                     <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="110"/>
                                     <GridViewColumn Header="Species" DisplayMemberBinding="{Binding Species}" Width="90"/>
                                     <GridViewColumn Header="Breed" DisplayMemberBinding="{Binding Breed}" Width="110"/>
-                                    <GridViewColumn Header="Age" DisplayMemberBinding="{Binding Age}" Width="50"/>
+                                    <GridViewColumn Header="Age" DisplayMemberBinding="{Binding AgeDisplay}" Width="110"/>
                                     <GridViewColumn Header="Notes" DisplayMemberBinding="{Binding Notes}" Width="150"/>
                                 </GridView>
                             </ListView.View>
@@ -64,8 +64,24 @@
                         <TextBox x:Name="PetSpeciesBox"/>
                         <TextBlock Text="Breed" Style="{StaticResource FieldLabel}"/>
                         <TextBox x:Name="PetBreedBox"/>
-                        <TextBlock Text="Age (years)" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="PetAgeBox" Text="0"/>
+                        <TextBlock Text="Age" Style="{StaticResource FieldLabel}"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBox x:Name="PetAgeBox" Text="0"/>
+                                <TextBlock Text="Years" FontSize="11" Foreground="{StaticResource Muted}"
+                                           Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBox x:Name="PetAgeMonthsBox"/>
+                                <TextBlock Text="Months (optional, 0-11)" FontSize="11"
+                                           Foreground="{StaticResource Muted}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Grid>
                         <TextBlock Text="Care notes" Style="{StaticResource FieldLabel}"/>
                         <TextBox x:Name="PetNotesBox" AcceptsReturn="True" TextWrapping="Wrap" Height="48"/>
                         <Button Content="Add pet" Margin="0,12,0,0" Click="AddPet_Click"/>

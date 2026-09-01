@@ -1,3 +1,6 @@
+﻿using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PetSitters.Models;
 using PetSitters.Services;
@@ -12,13 +15,22 @@ namespace PetSitters.Tests
     [TestClass]
     public class AuthServiceTests : DatabaseTestBase
     {
+        private const int LoginBudgetMilliseconds = 1000;
+        private const int LoginSamples = 5;
+        public TestContext TestContext { get; set; }
+
         private AuthResult RegisterOwner(string email = "olivia@test.com", string password = "secret1")
         {
-            return Services.Auth.Register(email, password, UserRole.Owner,
-                "Olivia Owner", "0210000000", "Wellington");
+            return Services.Auth.Register(email,
+                password,
+                UserRole.Owner,
+                "Olivia Owner",
+                "0210000000",
+                "Wellington");
         }
 
         // ---- FR-A1: account creation ----
+        // FR-03
         [TestMethod]
         public void Register_WithValidDetails_Succeeds()
         {
@@ -61,6 +73,40 @@ namespace PetSitters.Tests
             Assert.IsFalse(result.Success);
         }
 
+        [DataTestMethod]
+        [DataRow("")]
+        [DataRow("   ")]
+        public void Register_WithEmptyPhone_Fails(string phone)
+        {
+            // All registration fields are required.
+            AuthResult result = Services.Auth.Register("olivia@test.com", "secret1", UserRole.Owner,
+                "Olivia Owner", phone, "Wellington");
+
+            Assert.IsFalse(result.Success);
+        }
+
+        [DataTestMethod]
+        [DataRow("")]
+        [DataRow("   ")]
+        public void Register_WithEmptyLocation_Fails(string location)
+        {
+            AuthResult result = Services.Auth.Register("olivia@test.com", "secret1", UserRole.Owner,
+                "Olivia Owner", "021", location);
+
+            Assert.IsFalse(result.Success);
+        }
+
+        [TestMethod]
+        public void Register_WithAllFieldsSupplied_PersistsPhoneAndLocation()
+        {
+            AuthResult result = RegisterOwner();
+
+            User stored = Services.Users.FindByEmail("olivia@test.com");
+            Assert.IsTrue(result.Success);
+            Assert.AreEqual("0210000000", stored.Phone);
+            Assert.AreEqual("Wellington", stored.Location);
+        }
+
         [TestMethod]
         public void Register_DuplicateEmail_Fails_CaseInsensitive()
         {
@@ -86,15 +132,40 @@ namespace PetSitters.Tests
         }
 
         // ---- FR-A2: login ----
+        // FR-08
+
         [TestMethod]
-        public void Login_WithCorrectCredentials_Succeeds()
+        public void Login_WithCorrectCredentials_SucceedsWithinPerformanceBudget()
         {
             RegisterOwner("olivia@test.com", "secret1");
+            Services.Auth.Login("olivia@test.com", "secret1");
 
-            AuthResult result = Services.Auth.Login("olivia@test.com", "secret1");
+            AuthResult result = null;
+            var timings = new List<double>();
+
+            for (int sample = 0; sample < LoginSamples; sample++)
+            {
+                var stopwatch = Stopwatch.StartNew();
+                result = Services.Auth.Login("olivia@test.com", "secret1");
+                stopwatch.Stop();
+
+                timings.Add(stopwatch.Elapsed.TotalMilliseconds);
+            }
 
             Assert.IsTrue(result.Success, result.ErrorMessage);
             Assert.AreEqual("olivia@test.com", result.User.Email);
+
+            double slowest = timings.Max();
+            double average = timings.Average();
+
+            TestContext.WriteLine(
+                "Sign-in over {0} samples - fastest {1:F1} ms, average {2:F1} ms, slowest {3:F1} ms (budget {4} ms).",
+                LoginSamples, timings.Min(), average, slowest, LoginBudgetMilliseconds);
+
+            Assert.IsTrue(slowest <= LoginBudgetMilliseconds,
+                string.Format(
+                    "Sign-in took {0:F1} ms, exceeding the {1} ms budget for REQ-NFR-02 (average {2:F1} ms over {3} samples).",
+                    slowest, LoginBudgetMilliseconds, average, LoginSamples));
         }
 
         [TestMethod]
