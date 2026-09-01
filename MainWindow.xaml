@@ -8,13 +8,15 @@
         Title="Sitters4Us" Height="640" Width="920"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource PageBg}">
+
     <DockPanel>
         <!-- Top header (unified with LoginView header) -->
         <Border DockPanel.Dock="Top" Background="{StaticResource LoginPaletteDark}" Height="72">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
                     <TextBlock Text="🐾" FontSize="28" VerticalAlignment="Center" Foreground="{StaticResource LoginPalettePale}"/>
-                    <TextBlock Text="Sitters4Us" FontSize="36" FontWeight="Bold" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource LoginPalettePale}"/>
+                    <TextBlock Text="Sitters4Us" FontFamily="/PetSitters;component/Assets/Fonts/#Fredoka" FontSize="36" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource LoginPalettePale}" FontWeight="Bold"/>
+                    <Image Source="/Assets/Images/Paw2.png" Height="56" Width="336" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel x:Name="SessionBar" Orientation="Horizontal" HorizontalAlignment="Right"
                             VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,20,0">
@@ -27,6 +29,7 @@
         </Border>
 
         <!-- Active view is swapped in here -->
-        <ContentControl x:Name="RootContent"/>
+        <ContentControl x:Name="RootContent">
+        </ContentControl>
     </DockPanel>
 </Window>

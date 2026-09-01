@@ -45,7 +45,7 @@
         <Border Background="{StaticResource LoginPaletteMid}" CornerRadius="22" Padding="36"
                 Width="420" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,40,0,0">
             <StackPanel HorizontalAlignment="Center">
-                <TextBlock Text="Welcome back" FontSize="24" FontWeight="Bold" Foreground="{StaticResource LoginPaletteDark}" HorizontalAlignment="Center"/>
+                <TextBlock Text="Welcome back" FontFamily="Fredoka" FontSize="24" Foreground="{StaticResource LoginPaletteDark}" HorizontalAlignment="Center" FontWeight="Bold"/>
                 <TextBlock Text="Log in to find or offer pet sitting." Foreground="{StaticResource LoginPaletteDark}" HorizontalAlignment="Center" Opacity="0.85" Margin="0,6,0,14"/>
 
                 <TextBlock Text="Email" Foreground="{StaticResource LoginPalettePale}" HorizontalAlignment="Left" Margin="0,6,0,6"/>
