@@ -4,6 +4,11 @@
              xmlns:local="clr-namespace:PetSitters">
     <Application.Resources>
         <!-- Simple shared palette / styling so the prototype looks presentable in demos -->
+        <FontFamily x:Key="FredokaFont">pack://application:,,,/Assets/Fonts/#Fredoka</FontFamily>
+        <!-- Shared palette colors used by multiple views (moved from LoginView) -->
+        <SolidColorBrush x:Key="LoginPalettePale" Color="#FFF8E7BD"/>
+        <SolidColorBrush x:Key="LoginPaletteDark" Color="#FFD99CA3"/>
+        <SolidColorBrush x:Key="LoginPaletteMid" Color="#FFE9B3BB"/>
         <SolidColorBrush x:Key="Brand" Color="#2E7D6F"/>
         <SolidColorBrush x:Key="BrandDark" Color="#226156"/>
         <SolidColorBrush x:Key="PageBg" Color="#F5F6F8"/>

@@ -141,6 +141,8 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <Resource Include="Assets\Fonts\Fredoka-Bold.ttf" />
+    <Resource Include="Assets\Fonts\Fredoka-Regular.ttf" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
@@ -152,5 +154,6 @@
   <ItemGroup>
     <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

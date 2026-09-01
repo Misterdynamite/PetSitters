@@ -9,7 +9,7 @@ namespace PetSitters.UiTests
     ///
     /// Purpose: lock down the cross-screen workflows that the fast logic tests in
     /// PetSitters.Tests cannot see. Those tests prove the services and
-    /// repositories behave; these prove the *application* is still wired together
+    /// repositories behave; these prove the *application* is still wired together 
     /// - navigation, view swapping, role routing, dialogs and tab state - by
     /// driving the real PetSitters.exe through Windows UI Automation.
     ///

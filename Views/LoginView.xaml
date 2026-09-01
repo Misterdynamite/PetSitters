@@ -3,29 +3,74 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignHeight="500" d:DesignWidth="900">
+             mc:Ignorable="d" d:DesignHeight="500" d:DesignWidth="900"
+             FontFamily="{StaticResource FredokaFont}">
+    <!--
+        To use Fredoka locally: add Fredoka-Regular.ttf and Fredoka-Bold.ttf
+        to Assets/Fonts/ and set Build Action = Resource.
+        The FontFamily below references the embedded font by family name.
+    -->
     <Grid>
-        <Border Background="{StaticResource CardBg}" CornerRadius="8" Padding="28"
-                Width="380" VerticalAlignment="Center" HorizontalAlignment="Center"
-                BorderBrush="#E5E7EB" BorderThickness="1">
-            <StackPanel>
-                <TextBlock Text="Welcome back" Style="{StaticResource H1}"/>
-                <TextBlock Text="Log in to find or offer pet sitting." Foreground="{StaticResource Muted}"/>
+        <!-- Local design resources for this view -->
+        <Grid.Resources>
+            <SolidColorBrush x:Key="LoginPalettePale" Color="#FFF8E7BD"/>
+            <SolidColorBrush x:Key="LoginPaletteDark" Color="#FFD99CA3"/>
+            <SolidColorBrush x:Key="LoginPaletteMid" Color="#FFE9B3BB"/>
+            <!-- fallback for white inputs -->
+            <SolidColorBrush x:Key="LoginInputBg" Color="White"/>
+            <!-- simple input style -->
+            <Style x:Key="LoginInputStyle" TargetType="TextBox">
+                <Setter Property="Background" Value="{StaticResource LoginInputBg}"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="Padding" Value="8"/>
+                <Setter Property="Height" Value="36"/>
+                <Setter Property="Width" Value="320"/>
+            </Style>
+            <Style x:Key="LoginPasswordStyle" TargetType="PasswordBox">
+                <Setter Property="Background" Value="{StaticResource LoginInputBg}"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="Padding" Value="8"/>
+                <Setter Property="Height" Value="36"/>
+                <Setter Property="Width" Value="320"/>
+            </Style>
+        </Grid.Resources>
 
-                <TextBlock Text="Email" Style="{StaticResource FieldLabel}"/>
-                <TextBox x:Name="EmailBox"/>
+        <!-- Page background using pale color -->
+        <Border Background="{StaticResource LoginPalettePale}"/>
 
-                <TextBlock Text="Password" Style="{StaticResource FieldLabel}"/>
-                <PasswordBox x:Name="PasswordBox"/>
+        <!-- Top header bar -->
+        <DockPanel LastChildFill="False"/>
+
+        <!-- Centered login card -->
+        <Border Background="{StaticResource LoginPaletteMid}" CornerRadius="22" Padding="36"
+                Width="420" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,40,0,0">
+            <StackPanel HorizontalAlignment="Center">
+                <TextBlock Text="Welcome back" FontSize="24" FontWeight="Bold" Foreground="{StaticResource LoginPaletteDark}" HorizontalAlignment="Center"/>
+                <TextBlock Text="Log in to find or offer pet sitting." Foreground="{StaticResource LoginPaletteDark}" HorizontalAlignment="Center" Opacity="0.85" Margin="0,6,0,14"/>
+
+                <TextBlock Text="Email" Foreground="{StaticResource LoginPalettePale}" HorizontalAlignment="Left" Margin="0,6,0,6"/>
+                <TextBox x:Name="EmailBox" Style="{StaticResource LoginInputStyle}" HorizontalAlignment="Center"/>
+
+                <TextBlock Text="Password" Foreground="{StaticResource LoginPalettePale}" HorizontalAlignment="Left" Margin="0,14,0,6"/>
+                <PasswordBox x:Name="PasswordBox" Style="{StaticResource LoginPasswordStyle}" HorizontalAlignment="Center"/>
 
                 <TextBlock x:Name="ErrorText" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
-                           Margin="0,10,0,0" Visibility="Collapsed"/>
+                           Margin="0,10,0,0" Visibility="Collapsed" HorizontalAlignment="Center"/>
 
-                <Button Content="Log in" Margin="0,16,0,0" Click="Login_Click" IsDefault="True"/>
+                <Button Content="Log in" Margin="0,20,0,0" Click="Login_Click" IsDefault="True" Width="180" Height="36"
+                        HorizontalAlignment="Center" Background="{StaticResource LoginPaletteDark}" Foreground="{StaticResource LoginPalettePale}" BorderThickness="0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="18">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
 
-                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
-                    <TextBlock Text="New here? " Foreground="{StaticResource Muted}"/>
-                    <Button Content="Create an account" Style="{StaticResource LinkButton}" Click="Register_Click"/>
+                <StackPanel Orientation="Horizontal" Margin="0,18,0,0" HorizontalAlignment="Center">
+                    <TextBlock Text="New here? " Foreground="White" Opacity="0.9" VerticalAlignment="Center"/>
+                    <Button Content="Create an account" Style="{StaticResource LinkButton}" Click="Register_Click" VerticalAlignment="Center"/>
                 </StackPanel>
             </StackPanel>
         </Border>
