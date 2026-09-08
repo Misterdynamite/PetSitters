@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="Sitters4Us" Height="640" Width="920"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource PageBg}">
+        Background="#FFF8E7BD">
 
     <DockPanel>
         <!-- Top header (unified with LoginView header) -->
