@@ -4,28 +4,44 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignHeight="560" d:DesignWidth="900">
-    <TabControl x:Name="RootTabs" Margin="16" Background="Transparent" BorderThickness="0">
+    <TabControl x:Name="RootTabs" Margin="16" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource TopTabItem}">
 
         <!-- FR-7: personal details incl. location -->
         <TabItem Header="My Details">
-            <Border Background="{StaticResource CardBg}" CornerRadius="8" Padding="24" Margin="0,12"
-                    BorderBrush="#E5E7EB" BorderThickness="1" HorizontalAlignment="Left" Width="420"
-                    VerticalAlignment="Top">
-                <StackPanel>
-                    <TextBlock Text="My details" Style="{StaticResource H1}"/>
-                    <TextBlock Text="Email" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock x:Name="EmailText" FontSize="14"/>
-                    <TextBlock Text="Full name" Style="{StaticResource FieldLabel}"/>
-                    <TextBox x:Name="NameBox"/>
-                    <TextBlock Text="Phone" Style="{StaticResource FieldLabel}"/>
-                    <TextBox x:Name="PhoneBox"/>
-                    <TextBlock Text="Location (suburb / city)" Style="{StaticResource FieldLabel}"/>
-                    <TextBox x:Name="LocationBox"/>
-                    <Button Content="Save details" Margin="0,16,0,0" HorizontalAlignment="Left"
-                            Click="SaveDetails_Click"/>
-                    <TextBlock x:Name="DetailsStatus" Foreground="{StaticResource Brand}" Margin="0,8,0,0"/>
-                </StackPanel>
-            </Border>
+            <Grid Margin="0,24">
+                <Border Background="{StaticResource LoginPaletteMid}" CornerRadius="12" Padding="24"
+                        BorderBrush="#E5E7EB" BorderThickness="1" HorizontalAlignment="Center" Width="460"
+                        VerticalAlignment="Center" MinHeight="420">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel HorizontalAlignment="Center" Margin="0,4">
+                        <Grid HorizontalAlignment="Center" Margin="0,0,0,8">
+                            <Ellipse Width="140" Height="140" Cursor="Hand" MouseLeftButtonUp="ImportProfileImage_Click">
+                                <Ellipse.Fill>
+                                    <ImageBrush x:Name="ProfileImageBrushSitter" ImageSource="/Assets/Images/Paw2.png" Stretch="UniformToFill"/>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                        </Grid>
+                        <TextBlock Text="Sitter" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
+
+                        <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                            <TextBlock x:Name="EmailText" TextAlignment="Center" FontSize="14" Foreground="{StaticResource Muted}"/>
+                        </Border>
+                        <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                            <TextBox x:Name="NameBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
+                        </Border>
+                        <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                            <TextBox x:Name="PhoneBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
+                        </Border>
+                        <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                            <TextBox x:Name="LocationBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
+                        </Border>
+                        <Button Content="Save details" Style="{StaticResource CardSaveButton}"
+                                Click="SaveDetails_Click" Width="220"/>
+                        <TextBlock x:Name="DetailsStatus" Foreground="{StaticResource Brand}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
         </TabItem>
 
         <!-- FR-8: availability, experience, preferences, qualifications, daily rate -->

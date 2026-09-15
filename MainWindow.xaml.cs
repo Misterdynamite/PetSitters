@@ -65,6 +65,8 @@ namespace PetSitters
             }
         }
 
+        // Top navigation removed; dashboards still contain their own tabs.
+
         private void LogoutButton_Click(object sender, RoutedEventArgs e)
         {
             ShowLogin();

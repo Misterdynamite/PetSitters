@@ -21,8 +21,8 @@ namespace PetSitters.Data
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = @"
-INSERT INTO Pets (OwnerUserId, Name, Species, Breed, Age, AgeMonths, Notes)
-VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @notes);
+INSERT INTO Pets (OwnerUserId, Name, Species, Breed, Age, AgeMonths, ImagePath, Notes)
+VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @image, @notes);
 SELECT last_insert_rowid();";
                 command.Parameters.AddWithValue("@owner", pet.OwnerUserId);
                 command.Parameters.AddWithValue("@name", pet.Name);
@@ -31,6 +31,7 @@ SELECT last_insert_rowid();";
                 command.Parameters.AddWithValue("@age", pet.Age);
                 command.Parameters.AddWithValue("@ageMonths", pet.AgeMonths);
                 command.Parameters.AddWithValue("@notes", (object)pet.Notes ?? DBNull.Value);
+                command.Parameters.AddWithValue("@image", (object)pet.ImagePath ?? DBNull.Value);
                 pet.Id = Convert.ToInt32(command.ExecuteScalar());
                 return pet;
             }
@@ -66,7 +67,7 @@ SELECT last_insert_rowid();";
 
         private static Pet Map(SQLiteDataReader reader)
         {
-            return new Pet
+                return new Pet
             {
                 Id = Convert.ToInt32(reader["Id"]),
                 OwnerUserId = Convert.ToInt32(reader["OwnerUserId"]),
@@ -75,7 +76,8 @@ SELECT last_insert_rowid();";
                 Breed = reader["Breed"] as string,
                 Age = Convert.ToInt32(reader["Age"]),
                 AgeMonths = Convert.ToInt32(reader["AgeMonths"]),
-                Notes = reader["Notes"] as string
+                Notes = reader["Notes"] as string,
+                ImagePath = reader["ImagePath"] as string
             };
         }
     }

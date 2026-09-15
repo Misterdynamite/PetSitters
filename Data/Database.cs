@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS Users (
     FullName      TEXT    NOT NULL,
     Phone         TEXT,
     Location      TEXT,
+    ProfileImagePath TEXT,
     CreatedUtc    TEXT    NOT NULL
 );
 
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS Pets (
     Breed        TEXT,
     Age          INTEGER NOT NULL DEFAULT 0,
     AgeMonths    INTEGER NOT NULL DEFAULT 0,
+    ImagePath    TEXT,
     Notes        TEXT,
     FOREIGN KEY (OwnerUserId) REFERENCES Users(Id) ON DELETE CASCADE
 );
@@ -142,6 +144,28 @@ CREATE TABLE IF NOT EXISTS ChatMessages (
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = "ALTER TABLE Pets ADD COLUMN AgeMonths INTEGER NOT NULL DEFAULT 0;";
+                    command.ExecuteNonQuery();
+                }
+            }
+
+            // Add ProfileImagePath to Users if missing
+            if (!ColumnExists("Users", "ProfileImagePath"))
+            {
+                using (var connection = OpenConnection())
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "ALTER TABLE Users ADD COLUMN ProfileImagePath TEXT;";
+                    command.ExecuteNonQuery();
+                }
+            }
+
+            // Add ImagePath to Pets if missing
+            if (!ColumnExists("Pets", "ImagePath"))
+            {
+                using (var connection = OpenConnection())
+                using (var command = connection.CreateCommand())
+                {
+                    command.CommandText = "ALTER TABLE Pets ADD COLUMN ImagePath TEXT;";
                     command.ExecuteNonQuery();
                 }
             }

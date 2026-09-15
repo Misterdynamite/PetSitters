@@ -21,6 +21,23 @@
             <Setter Property="Foreground" Value="#1F2937"/>
         </Style>
 
+        <!-- Header tab style for navigation buttons in the top bar -->
+        <Style x:Key="HeaderTabButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource LoginPaletteMid}" />
+            <Setter Property="Foreground" Value="{StaticResource LoginPaletteDark}" />
+            <Setter Property="Padding" Value="18,6" />
+            <Setter Property="Margin" Value="6,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="16" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="H1" TargetType="TextBlock">
             <Setter Property="FontSize" Value="22"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -96,6 +113,44 @@
 
         <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="{StaticResource Danger}"/>
+        </Style>
+
+        <!-- Top tab pill style used by dashboard views -->
+        <Style x:Key="TopTabItem" TargetType="TabItem">
+            <Setter Property="Margin" Value="6,0" />
+            <Setter Property="Padding" Value="20,6" />
+            <Setter Property="Foreground" Value="{StaticResource LoginPaletteDark}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Bd" Background="{StaticResource LoginPaletteMid}" CornerRadius="16" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" ContentSource="Header"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource LoginPaletteDark}"/>
+                                <Setter Property="Foreground" Value="{StaticResource LoginPalettePale}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Small rounded save button used on details card -->
+        <Style x:Key="CardSaveButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource LoginPaletteDark}"/>
+            <Setter Property="Foreground" Value="{StaticResource LoginPalettePale}"/>
+            <Setter Property="Padding" Value="20,8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="14" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Application.Resources>
 </Application>

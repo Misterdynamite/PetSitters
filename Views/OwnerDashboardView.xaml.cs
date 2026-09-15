@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using Microsoft.Win32;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -32,6 +34,8 @@ namespace PetSitters.Views
         }
 
         private User Me => _services.CurrentUser;
+        // temporary storage for the image chosen when adding a new pet
+        private string _newPetImagePath;
 
         // ---- FR-3: personal details ------------------------------------------------
         private void LoadDetails()
@@ -40,6 +44,33 @@ namespace PetSitters.Views
             NameBox.Text = Me.FullName;
             PhoneBox.Text = Me.Phone;
             LocationBox.Text = Me.Location;
+            // load profile image if set
+            if (!string.IsNullOrEmpty(Me.ProfileImagePath) && File.Exists(Me.ProfileImagePath))
+            {
+                try
+                {
+                    var uri = new Uri(Me.ProfileImagePath);
+                    ProfileImageBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(uri);
+                }
+                catch { /* ignore image load errors */ }
+            }
+        }
+
+        /// <summary>
+        /// Select the named tab in the dashboard (called from the main header nav).
+        /// </summary>
+        public void SelectTab(string header)
+        {
+            var tabs = FindName("RootTabs") as System.Windows.Controls.TabControl;
+            if (tabs == null) return;
+            foreach (var item in tabs.Items)
+            {
+                if (item is System.Windows.Controls.TabItem t && t.Header != null && t.Header.ToString() == header)
+                {
+                    tabs.SelectedItem = t;
+                    return;
+                }
+            }
         }
 
         private void SaveDetails_Click(object sender, RoutedEventArgs e)
@@ -95,7 +126,8 @@ namespace PetSitters.Views
                 Breed = PetBreedBox.Text.Trim(),
                 Age = age,
                 AgeMonths = ageMonths,
-                Notes = PetNotesBox.Text.Trim()
+                Notes = PetNotesBox.Text.Trim(),
+                ImagePath = _newPetImagePath
             });
 
             PetNameBox.Clear();
@@ -107,6 +139,53 @@ namespace PetSitters.Views
 
             LoadPets();
             RefreshBookingPetCombo();
+        }
+
+        private void ImportProfileImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog { Filter = "Image files|*.png;*.jpg;*.jpeg;*.bmp;*.gif" };
+            if (dlg.ShowDialog() == true)
+            {
+                string dest = CopyImageToUserFolder(dlg.FileName);
+                if (dest != null)
+                {
+                    Me.ProfileImagePath = dest;
+                    _services.Users.UpdateDetails(Me); // persist path
+                    try { ProfileImageBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(dest)); } catch { }
+                }
+            }
+        }
+
+        private void ImportPetImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog { Filter = "Image files|*.png;*.jpg;*.jpeg;*.bmp;*.gif" };
+            if (dlg.ShowDialog() == true)
+            {
+                string dest = CopyImageToUserFolder(dlg.FileName);
+                if (dest != null)
+                {
+                    _newPetImagePath = dest;
+                    try { PetPreview.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(dest)); } catch { }
+                }
+            }
+        }
+
+        private string CopyImageToUserFolder(string sourcePath)
+        {
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string folder = Path.Combine(appData, "PetSitters", "UserImages");
+                Directory.CreateDirectory(folder);
+                string fileName = Guid.NewGuid().ToString() + Path.GetExtension(sourcePath);
+                string dest = Path.Combine(folder, fileName);
+                File.Copy(sourcePath, dest, true);
+                return dest;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void DeletePet_Click(object sender, RoutedEventArgs e)

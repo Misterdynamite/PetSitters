@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Microsoft.Win32;
 using PetSitters.Models;
 using PetSitters.Services;
 
@@ -50,6 +52,21 @@ namespace PetSitters.Views
 
         private User Me => _services.CurrentUser;
 
+        private string CopyImageToUserFolder(string sourcePath)
+        {
+            try
+            {
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string folder = Path.Combine(appData, "PetSitters", "UserImages");
+                Directory.CreateDirectory(folder);
+                string fileName = Guid.NewGuid().ToString() + Path.GetExtension(sourcePath);
+                string dest = Path.Combine(folder, fileName);
+                File.Copy(sourcePath, dest, true);
+                return dest;
+            }
+            catch { return null; }
+        }
+
         // Current booking id for which chat is open
         private int? _activeChatBookingId;
 
@@ -60,6 +77,27 @@ namespace PetSitters.Views
             NameBox.Text = Me.FullName;
             PhoneBox.Text = Me.Phone;
             LocationBox.Text = Me.Location;
+            if (!string.IsNullOrEmpty(Me.ProfileImagePath) && File.Exists(Me.ProfileImagePath))
+            {
+                try { ProfileImageBrushSitter.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(Me.ProfileImagePath)); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Allow the main window to instruct this view to switch tabs by header text.
+        /// </summary>
+        public void SelectTab(string header)
+        {
+            var tabs = FindName("RootTabs") as System.Windows.Controls.TabControl;
+            if (tabs == null) return;
+            foreach (var item in tabs.Items)
+            {
+                if (item is System.Windows.Controls.TabItem t && t.Header != null && t.Header.ToString() == header)
+                {
+                    tabs.SelectedItem = t;
+                    return;
+                }
+            }
         }
 
         private void SaveDetails_Click(object sender, RoutedEventArgs e)
@@ -78,6 +116,21 @@ namespace PetSitters.Views
 
             DetailsStatus.Foreground = (Brush)FindResource("Brand");
             DetailsStatus.Text = "Saved.";
+        }
+
+        private void ImportProfileImage_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new OpenFileDialog { Filter = "Image files|*.png;*.jpg;*.jpeg;*.bmp;*.gif" };
+            if (dlg.ShowDialog() == true)
+            {
+                string dest = CopyImageToUserFolder(dlg.FileName);
+                if (dest != null)
+                {
+                    Me.ProfileImagePath = dest;
+                    _services.Users.UpdateDetails(Me);
+                    try { ProfileImageBrushSitter.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(dest)); } catch { }
+                }
+            }
         }
 
         // ---- FR-8: sitting profile -------------------------------------------------

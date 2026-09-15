@@ -30,6 +30,9 @@ namespace PetSitters.Models
         /// <summary>Care notes, e.g. "Needs medication twice a day".</summary>
         public string Notes { get; set; }
 
+        /// <summary>Local path to the pet image copied into the app user images folder.</summary>
+        public string ImagePath { get; set; }
+
         /// <summary>
         /// Human-readable age combining years and months, e.g. "2 years 3 months",
         /// "1 year", "5 months". Used in the pet list and the sitter's job details.

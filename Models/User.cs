@@ -30,5 +30,8 @@ namespace PetSitters.Models
         public string Location { get; set; }
 
         public DateTime CreatedUtc { get; set; }
+
+        /// <summary>Local path to the profile image copied into the app user images folder.</summary>
+        public string ProfileImagePath { get; set; }
     }
 }

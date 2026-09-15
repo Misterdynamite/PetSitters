@@ -61,11 +61,12 @@ SELECT last_insert_rowid();";
             {
                 command.CommandText = @"
 UPDATE Users
-SET FullName = @name, Phone = @phone, Location = @location
+SET FullName = @name, Phone = @phone, Location = @location, ProfileImagePath = @image
 WHERE Id = @id;";
                 command.Parameters.AddWithValue("@name", user.FullName);
                 command.Parameters.AddWithValue("@phone", (object)user.Phone ?? DBNull.Value);
                 command.Parameters.AddWithValue("@location", (object)user.Location ?? DBNull.Value);
+                command.Parameters.AddWithValue("@image", (object)user.ProfileImagePath ?? DBNull.Value);
                 command.Parameters.AddWithValue("@id", user.Id);
                 command.ExecuteNonQuery();
             }
@@ -130,7 +131,8 @@ WHERE Id = @id;";
                 Phone = reader["Phone"] as string,
                 Location = reader["Location"] as string,
                 CreatedUtc = DateTime.Parse((string)reader["CreatedUtc"], CultureInfo.InvariantCulture,
-                    DateTimeStyles.RoundtripKind)
+                    DateTimeStyles.RoundtripKind),
+                ProfileImagePath = reader["ProfileImagePath"] as string
             };
         }
     }
