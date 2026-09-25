@@ -6,10 +6,10 @@ requirements traceability matrix, and how to run everything.
 
 - **Project:** `PetSitters.Tests` (MSTest, SDK-style, targets `net472`)
 - **What it tests:** the UI-independent logic layer — `Services` (`AuthService`,
-  `ValidationHelper`, `PasswordHasher`), the domain `Models`, and the SQLite
-  `Data` repositories.
-- **Result:** **48 test methods → 102 executed cases** (the difference is
-  `[DataRow]` data-driven expansion). All passing.
+  `BookingService`, `ValidationHelper`, `PasswordHasher`), the domain `Models`,
+  and the SQLite `Data` repositories.
+- **Result:** **62 test methods → 128 executed cases** (the difference is
+  `[DataRow]` data-driven expansion). All passing (last run 2026-09-26).
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
   `PetSitters.UiTests` (FlaUI) project.
 
@@ -89,7 +89,25 @@ app, so they can run in any order (or in parallel) safely.
 | `Nights_IsDateSpan_WithMinimumOfOne` | Boundary-value analysis on the "minimum 1 night" clamp (0→1, 1→1, 3→3, 7→7) | 4 |
 | `EstimatedTotal_IsNightsTimesDailyRate` | nights × daily-rate cost, incl. the clamped case | 4 |
 
+#### `BookingOverlapTests` — 3 methods / 13 cases · REQ-GR-08
+| Test | Technique | Cases |
+|------|-----------|-------|
+| `RangesOverlap_AgainstAcceptedBooking` | Boundary-value analysis around a 10th→13th booking: inside, surrounding, each edge, and back-to-back on both sides (hand-back day = next start day is **not** a clash) | 11 |
+| `RangesOverlap_IsSymmetric` | Overlap does not depend on which booking is checked first | 1 |
+| `RangesOverlap_IgnoresTimeOfDay` | Only dates are compared, since the form captures dates, not times | 1 |
+
 ### Component / integration tests (real isolated SQLite)
+
+#### `BookingServiceTests` — 7 methods / 9 cases · REQ-GR-08, REQ-PS-03
+| Test | What it verifies |
+|------|------------------|
+| `AcceptRequest_WithNoClash_AcceptsAndPersists` | A non-clashing request is accepted and persisted. |
+| `AcceptRequest_OverlappingAnAcceptedBooking_IsRejectedAndStaysPending` | FR-07: overlap with an accepted booking is refused with a "stay pending" message; neither booking changes. |
+| `AcceptRequest_BackToBackWithAcceptedBooking_IsAccepted` | Boundary: ending and starting on the same day is allowed. |
+| `AcceptRequest_OverlappingANonAcceptedBooking_IsAccepted` `[DataRow ×3]` | Pending / declined / cancelled bookings do not block (only accepted ones do). |
+| `AcceptRequest_OverlapWithAnotherSittersBooking_IsAccepted` | The rule is per sitter. |
+| `AcceptRequest_ForAnotherSittersBooking_IsRejected` | A sitter cannot accept a booking addressed to someone else. |
+| `AcceptRequest_ForANonPendingBooking_IsRejected` | A cancelled booking cannot be revived by accepting it. |
 
 #### `AuthServiceTests` — 13 methods / 19 cases · FR-A1, FR-A2
 | Test | What it verifies |
@@ -165,7 +183,8 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | FR-O5 | Owner chats with sitter once accepted | `ChatPersistenceTests` (persistence + isolation) | ⚠️ Data layer tested; owner-side chat UI still WIP |
 | FR-S1 | Sitter registers personal details (incl. location) | `UserRepositoryTests` (shared user table) | ✅ Passing |
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
-| FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings` | ✅ Passing |
+| FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
+| REQ-GR-08 | Sitter cannot accept overlapping bookings (FR-07) | `BookingOverlapTests`; `AcceptRequest_Overlap*`, `AcceptRequest_BackToBack*` (BookingServiceTests); UI: `OverlappingRequests_*` | ✅ Passing |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation

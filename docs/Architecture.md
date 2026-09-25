@@ -61,6 +61,7 @@ flowchart TD
     end
     subgraph SVC["Services (no WPF)"]
         AS[AuthService]
+        BS[BookingService]
         VH[ValidationHelper]
         PH[PasswordHasher]
         APP[AppServices - composition root + CurrentUser]
@@ -89,7 +90,8 @@ flowchart TD
 - **`App.xaml.cs`** creates `AppServices.CreateDefault()` once at startup and
   injects it into `MainWindow`.
 - **`AppServices`** is a simple composition root: it builds the `Database` and the
-  repositories, exposes them plus `AuthService`, and holds the logged-in
+  repositories, exposes them plus `AuthService` and `BookingService`
+  (as `BookingActions`), and holds the logged-in
   `CurrentUser` (the session).
 - **`MainWindow`** hosts a `ContentControl` and swaps `UserControl` views:
   login → register → an owner or sitter dashboard depending on `CurrentUser.Role`.
@@ -244,6 +246,16 @@ The sitter sees pending requests under **Booking Requests**, can open
 **View details** (`JobDetailsWindow`), and **Accept**/**Decline** (updates
 `Bookings.Status`). Accepted bookings appear under **My Chats**; opening one shows
 the per-booking **Chat** panel backed by `ChatRepository`.
+
+**Accept** goes through `BookingService.AcceptRequest` rather than the repository
+directly, which enforces **REQ-GR-08**: a sitter cannot accept a request whose
+dates overlap a booking they have already *accepted*. Ranges are half-open
+`[StartDate, EndDate)` (`Booking.Overlaps`), so a booking handed back on the 13th
+does not clash with one starting on the 13th. Pending, declined or cancelled
+bookings never block. A refused request is left **pending** and the reason is
+shown in the request panel; the list is deliberately not reloaded, so the
+message stays visible. Owners may still *send* overlapping requests: the check
+is applied only on acceptance.
 
 > **Known WIP:** owner-side chat (FR-O5) is not yet built — only the sitter can
 > open the chat UI. The chat data layer already supports both directions and is

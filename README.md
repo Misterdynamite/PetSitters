@@ -35,6 +35,7 @@ Services/    UI-independent logic
              - PasswordHasher.cs     PBKDF2 password hashing (no plaintext)
              - ValidationHelper.cs   email/password/number validation
              - AuthService.cs        registration + login rules
+             - BookingService.cs     accepting requests (no overlapping accepted bookings)
              - AppServices.cs        composition root (wires everything together)
 Views/       WPF UserControls (one per screen), swapped into MainWindow
 ```

@@ -18,7 +18,7 @@ QA artefacts and tests matter as much as features.
 | Project | Kind | Framework | Purpose |
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
-| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (75 cases) |
+| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (128 cases) |
 | `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation |
 
 ## Build, test, run — IMPORTANT tooling notes
@@ -69,6 +69,7 @@ without launching a window:
 Models/     POCOs: User, SitterProfile, Pet, Booking, ChatMessage, enums
 Data/       SQLite: Database (schema + connection factory) + one repository per table
 Services/   PasswordHasher (PBKDF2), ValidationHelper, AuthService (+AuthResult),
+            BookingService (+BookingResult; accept + REQ-GR-08 overlap rule),
             AppServices (composition root; holds repos + CurrentUser)
 Views/      WPF UserControls, one per screen, swapped into MainWindow
 ```
@@ -103,6 +104,12 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   in comments. Put DB tests in classes deriving from `DatabaseTestBase`.
 
 ## Known state / WIP
+
+- **UI regression suite fails at the default window size (since the login/register
+  redesign, 503e9af/6f33d67).** The 920×640 window clips the password box off
+  screen, so FlaUI throws `NoClickablePointException`. All 3 UI tests pass with the
+  window maximised (checked 2026-09-26). Fix the layout (or add a ScrollViewer)
+  rather than maximising in the driver, because real users hit the same clipping.
 
 - **Owner-side chat (FR-O5) is not implemented.** Chat works only from the sitter
   dashboard (My Chats / hidden Chat tab). The chat data layer (`ChatRepository`,

@@ -19,6 +19,7 @@ full job details before deciding) is UI-only presentation, so this project is it
 | Test | What it locks down |
 |------|--------------------|
 | `BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen` | The full two-role workflow (below) |
+| `OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending` | REQ-GR-08: after accepting one of two same-date requests, accepting the other is refused with a "stay pending" message and it remains in the list |
 | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | Failed login shows the generic, non-enumerating message and stays put |
 
 The journey covers: register **Sitter** → personal details → sitting profile →
