@@ -102,6 +102,7 @@
     <Compile Include="Services\ValidationHelper.cs" />
     <Compile Include="Services\AuthResult.cs" />
     <Compile Include="Services\AuthService.cs" />
+    <Compile Include="Services\BookingService.cs" />
     <Compile Include="Services\AppServices.cs" />
     <Compile Include="Views\LoginView.xaml.cs">
       <DependentUpon>LoginView.xaml</DependentUpon>

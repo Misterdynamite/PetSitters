@@ -239,7 +239,24 @@ namespace PetSitters.Views
                 return;
             }
 
-            _services.Bookings.UpdateStatus(row.BookingId, status);
+            if (status == BookingStatus.Accepted)
+            {
+                // Accepting goes through BookingService so the REQ-GR-08 overlap
+                // rule is enforced. On rejection, return BEFORE LoadRequests():
+                // it blanks RequestStatus, and the request must stay in the list.
+                BookingResult result = _services.BookingActions.AcceptRequest(row.BookingId, Me.Id);
+                if (!result.Success)
+                {
+                    RequestStatus.Foreground = (Brush)FindResource("Danger");
+                    RequestStatus.Text = result.ErrorMessage;
+                    return;
+                }
+            }
+            else
+            {
+                _services.Bookings.UpdateStatus(row.BookingId, status);
+            }
+
             RequestStatus.Foreground = (Brush)FindResource("Brand");
             RequestStatus.Text = $"Request {status.ToString().ToLowerInvariant()}.";
             LoadRequests();

@@ -47,5 +47,28 @@ namespace PetSitters.Models
         {
             get { return Nights * DailyRateAtBooking; }
         }
+
+        /// <summary>
+        /// True if this booking's date range overlaps <paramref name="other"/>'s
+        /// (REQ-GR-08). Ranges are treated as half-open [StartDate, EndDate):
+        /// EndDate is the hand-back day, so a booking ending on the 3rd and one
+        /// starting on the 3rd are back-to-back, not overlapping - the same
+        /// "nights" model <see cref="Nights"/> uses. Only the date part is
+        /// compared because the booking form captures dates, not times.
+        /// </summary>
+        public bool Overlaps(Booking other)
+        {
+            if (other == null) throw new ArgumentNullException(nameof(other));
+            return RangesOverlap(StartDate, EndDate, other.StartDate, other.EndDate);
+        }
+
+        /// <summary>
+        /// The overlap rule itself, kept static so it can be unit tested with
+        /// boundary values without building whole bookings.
+        /// </summary>
+        public static bool RangesOverlap(DateTime startA, DateTime endA, DateTime startB, DateTime endB)
+        {
+            return startA.Date < endB.Date && startB.Date < endA.Date;
+        }
     }
 }

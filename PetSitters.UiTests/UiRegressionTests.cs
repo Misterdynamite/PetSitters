@@ -20,6 +20,7 @@ namespace PetSitters.UiTests
     ///   FR-O2 owner personal details             FR-S2 sitter sitting profile
     ///   FR-S4 sitter accepts a request           FR-S5 sitter chats once accepted
     ///   FR-S3 sitter views full job details  <-- UI-only; this is its ONLY coverage
+    ///   REQ-GR-08 overlapping accept refused (OverlappingRequests_* test)
     ///
     /// Not covered: FR-O5 (owner-side chat) is not implemented in the app yet, so
     /// the journey only exercises chat from the sitter side.
@@ -141,6 +142,54 @@ namespace PetSitters.UiTests
 
             LogInAsOwner();
             ConfirmOwnerSeesAcceptedBooking();
+        }
+
+        /// <summary>
+        /// REQ-GR-08 through the real GUI: the owner sends the same sitter two
+        /// requests for the same dates. The sitter accepts one; accepting the
+        /// other must be refused with a message, and it must stay in the pending
+        /// list. The logic tests (BookingServiceTests) prove the rule; this
+        /// proves the Accept button is actually routed through it.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("Regression")]
+        [TestCategory("EndToEnd")]
+        [TestProperty("Requirements", "REQ-GR-08, REQ-PS-03")]
+        public void OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending()
+        {
+            RegisterSitter();
+            FillSittingProfile();
+            LogOut();
+
+            RegisterOwner();
+            AddPet();
+            BookTheSitter();
+            // Selecting the sitter pre-fills today -> tomorrow, and a second click
+            // keeps those dates, so the two requests are guaranteed to overlap.
+            SendAnotherRequestForTheSameDates();
+            LogOut();
+
+            LogInAsSitter();
+            Step("Sitter accepts the first of the two overlapping requests");
+            _app.SelectTab("Booking Requests");
+            Assert.AreEqual(2, _app.CountListItems("RequestsList"),
+                "Both overlapping requests should be pending before the sitter responds.");
+            _app.SelectFirstListItem("RequestsList");
+            _app.ClickButton("Accept");   // G4: this auto-opens the Chat tab
+
+            Step("Sitter tries to accept the second, overlapping request (REQ-GR-08)");
+            _app.SelectTab("Booking Requests");
+            _app.SelectFirstListItem("RequestsList");
+            _app.ClickButton("Accept");
+
+            // Unlike G1, the refusal path deliberately does NOT reload the list,
+            // so the RequestStatus label is durable here and safe to assert on.
+            StringAssert.Contains(_app.ReadText("RequestStatus"), "overlaps a booking you have already accepted",
+                "Accepting an overlapping request should be refused with an explanation.");
+            StringAssert.Contains(_app.ReadText("RequestStatus"), "stay pending",
+                "The refusal should tell the sitter the request stays pending.");
+            Assert.AreEqual(1, _app.CountListItems("RequestsList"),
+                "The refused request should remain in the pending list.");
         }
 
         /// <summary>
@@ -285,6 +334,18 @@ namespace PetSitters.UiTests
 
             StringAssert.Contains(_app.ReadText("BookingStatus"), "Request sent",
                 "Sending a booking request should confirm it was sent.");
+        }
+
+        private void SendAnotherRequestForTheSameDates()
+        {
+            Step("Send the same sitter a second request for the same dates");
+
+            // The sitter is still selected and the form keeps its dates, so this
+            // produces a second pending request overlapping the first.
+            _app.ClickButton("Send booking request");
+
+            StringAssert.Contains(_app.ReadText("BookingStatus"), "Request sent",
+                "The second request should also be sent - owners may propose; only acceptance is checked.");
         }
 
         private void ConfirmOwnerSeesPendingBooking()

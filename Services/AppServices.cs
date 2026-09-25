@@ -17,6 +17,7 @@ namespace PetSitters.Services
         public BookingRepository Bookings { get; }
         public ChatRepository Chats { get; }
         public AuthService Auth { get; }
+        public BookingService BookingActions { get; }
 
         /// <summary>The currently logged-in user, or null if nobody is signed in.</summary>
         public User CurrentUser { get; set; }
@@ -32,6 +33,7 @@ namespace PetSitters.Services
             Bookings = new BookingRepository(database);
             Chats = new ChatRepository(database);
             Auth = new AuthService(Users);
+            BookingActions = new BookingService(Bookings);
         }
 
         /// <summary>Builds the services against the real AppData database.</summary>
