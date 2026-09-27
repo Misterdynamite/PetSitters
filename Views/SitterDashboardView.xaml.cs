@@ -30,6 +30,11 @@ namespace PetSitters.Views
             LoadDetails();
             LoadProfile();
             LoadRequests();
+            // refresh when bookings change elsewhere (e.g., owner cancels)
+            _services.Bookings.BookingStatusChanged += (id, status) =>
+            {
+                Dispatcher.Invoke(() => { LoadRequests(); LoadChats(); });
+            };
         }
 
         private void ChatsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -75,6 +80,13 @@ namespace PetSitters.Views
         {
             EmailText.Text = Me.Email;
             NameBox.Text = Me.FullName;
+            // show the user's role (Owner/Sitter) by looking up the named TextBlock
+            try
+            {
+                var roleTb = FindName("RoleText") as TextBlock;
+                if (roleTb != null) roleTb.Text = Me.Role.ToString();
+            }
+            catch { }
             PhoneBox.Text = Me.Phone;
             LocationBox.Text = Me.Location;
             if (!string.IsNullOrEmpty(Me.ProfileImagePath) && File.Exists(Me.ProfileImagePath))
@@ -327,6 +339,40 @@ namespace PetSitters.Views
             }
             // scroll to end
             ChatScroll.ScrollToEnd();
+        }
+
+        private void CancelBooking_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(ChatsList.SelectedItem is SitterRequestRow row))
+            {
+                MessageBox.Show("Select a chat first.");
+                return;
+            }
+
+            // Only allow cancelling bookings where the current user is the sitter
+            var booking = _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == row.BookingId);
+            if (booking == null)
+            {
+                MessageBox.Show("Booking not found or you are not the sitter for this booking.");
+                return;
+            }
+
+            var confirm = MessageBox.Show("Are you sure you want to cancel this booking?", "Confirm cancel", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (confirm != MessageBoxResult.Yes) return;
+
+            _services.Bookings.UpdateStatus(booking.Id, BookingStatus.Cancelled);
+
+            // If this booking's chat was open, close it
+            if (_activeChatBookingId.HasValue && _activeChatBookingId.Value == booking.Id)
+            {
+                _activeChatBookingId = null;
+                ChatTab.Visibility = Visibility.Collapsed;
+            }
+
+            // Refresh lists
+            LoadChats();
+            LoadRequests();
+            ChatSelectedDetails.Text = "Booking cancelled.";
         }
 
         private void ChatSend_Click(object sender, RoutedEventArgs e)

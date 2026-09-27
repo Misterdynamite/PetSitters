@@ -21,7 +21,7 @@
                                 </Ellipse.Fill>
                             </Ellipse>
                         </Grid>
-                        <TextBlock Text="Sitter" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
+                        <TextBlock x:Name="RoleText" Text="Sitter" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
 
                         <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
                             <TextBlock x:Name="EmailText" TextAlignment="Center" FontSize="14" Foreground="{StaticResource Muted}"/>
@@ -159,7 +159,10 @@
                         <TextBlock Text="Selected chat" Style="{StaticResource H2}"/>
                         <TextBlock Text="Details" Style="{StaticResource FieldLabel}"/>
                         <TextBlock x:Name="ChatSelectedDetails" TextWrapping="Wrap" Text="Select a chat to open."/>
-                        <Button Content="Open chat" Margin="0,12,0,0" Click="OpenChat_Click"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Open chat" Margin="0,12,0,0" Click="OpenChat_Click"/>
+                            <Button Content="Cancel booking" Margin="8,12,0,0" Style="{StaticResource DangerButton}" Click="CancelBooking_Click"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>

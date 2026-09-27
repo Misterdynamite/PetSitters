@@ -31,6 +31,12 @@ namespace PetSitters.Views
             LoadSitters();
             LoadBookings();
             LoadChats();
+            // refresh when bookings change elsewhere (e.g., sitter cancels)
+            _services.Bookings.BookingStatusChanged += (id, status) =>
+            {
+                // UI thread dispatch
+                Dispatcher.Invoke(() => { LoadBookings(); });
+            };
         }
 
         private User Me => _services.CurrentUser;
@@ -42,6 +48,13 @@ namespace PetSitters.Views
         {
             EmailText.Text = Me.Email;
             NameBox.Text = Me.FullName;
+            // show the user's role (Owner/Sitter) by looking up the named TextBlock
+            try
+            {
+                var roleTb = FindName("RoleText") as TextBlock;
+                if (roleTb != null) roleTb.Text = Me.Role.ToString();
+            }
+            catch { }
             PhoneBox.Text = Me.Phone;
             LocationBox.Text = Me.Location;
             // load profile image if set

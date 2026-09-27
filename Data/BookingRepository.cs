@@ -10,6 +10,10 @@ namespace PetSitters.Data
     public class BookingRepository
     {
         private readonly Database _db;
+        /// <summary>
+        /// Raised after a booking's status is updated. Parameters: bookingId, new status.
+        /// </summary>
+        public event System.Action<int, PetSitters.Models.BookingStatus> BookingStatusChanged;
 
         public BookingRepository(Database db)
         {
@@ -49,6 +53,8 @@ SELECT last_insert_rowid();";
                 command.Parameters.AddWithValue("@id", bookingId);
                 command.ExecuteNonQuery();
             }
+            // notify subscribers after the database update
+            try { BookingStatusChanged?.Invoke(bookingId, status); } catch { }
         }
 
         public List<Booking> GetForOwner(int ownerUserId)

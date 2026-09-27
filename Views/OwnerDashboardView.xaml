@@ -22,7 +22,7 @@
                                 </Ellipse.Fill>
                             </Ellipse>
 						</Grid>
-						<TextBlock Text="Sitter" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
+                        <TextBlock x:Name="RoleText" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
 
 						<Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
 							<TextBlock x:Name="EmailText" TextAlignment="Center" FontSize="14" Foreground="{StaticResource Muted}"/>
@@ -104,6 +104,7 @@
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,8,0,0">
                             <Image x:Name="PetPreview" Width="64" Height="64" Margin="0,0,8,0" Source="/Assets/Images/Paw2.png"/>
                             <Button Content="Import photo" Click="ImportPetImage_Click"/>
+                            <Button Content="Save pet" Style="{StaticResource CardSaveButton}" Click="AddPet_Click" Margin="8,0,0,0"/>
                         </StackPanel>
                         <Button Content="Add pet" Margin="0,12,0,0" Click="AddPet_Click"/>
                         <Button Content="Delete selected pet" Style="{StaticResource DangerButton}"
