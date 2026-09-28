@@ -51,6 +51,34 @@ namespace PetSitters.Tests
                 "Whether two bookings overlap must not depend on which one is checked first.");
         }
 
+        /// <summary>
+        /// REQ-PO-08 pet matching. 0 stands for "All my pets" (a null PetId),
+        /// since DataRow cannot carry a nullable int.
+        /// </summary>
+        [DataTestMethod]
+        [DataRow(1, 1, true,  DisplayName = "Same pet")]
+        [DataRow(1, 2, false, DisplayName = "Different pets")]
+        [DataRow(0, 1, true,  DisplayName = "All my pets vs a specific pet")]
+        [DataRow(1, 0, true,  DisplayName = "A specific pet vs all my pets")]
+        [DataRow(0, 0, true,  DisplayName = "All my pets vs all my pets")]
+        public void SharesPetWith_TreatsAllMyPetsAsEveryPet(int petA, int petB, bool expected)
+        {
+            var a = new Booking { PetId = petA == 0 ? (int?)null : petA };
+            var b = new Booking { PetId = petB == 0 ? (int?)null : petB };
+
+            Assert.AreEqual(expected, a.SharesPetWith(b));
+        }
+
+        [DataTestMethod]
+        [DataRow(BookingStatus.Pending, true)]
+        [DataRow(BookingStatus.Accepted, true)]
+        [DataRow(BookingStatus.Declined, false)]
+        [DataRow(BookingStatus.Cancelled, false)]
+        public void IsActive_OnlyForPendingAndAccepted(BookingStatus status, bool expected)
+        {
+            Assert.AreEqual(expected, new Booking { Status = status }.IsActive);
+        }
+
         [TestMethod]
         public void RangesOverlap_IgnoresTimeOfDay()
         {

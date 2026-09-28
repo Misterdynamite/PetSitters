@@ -21,6 +21,8 @@ namespace PetSitters.UiTests
     ///   FR-S4 sitter accepts a request           FR-S5 sitter chats once accepted
     ///   FR-S3 sitter views full job details  <-- UI-only; this is its ONLY coverage
     ///   REQ-GR-08 overlapping accept refused (OverlappingRequests_* test)
+    ///   REQ-PO-08 same-pet double booking refused, REQ-PO-07 owner cancels
+    ///     (SamePetDoubleBooking_* test; the journey also cancels an accepted booking)
     ///
     /// Not covered: FR-O5 (owner-side chat) is not implemented in the app yet, so
     /// the journey only exercises chat from the sitter side.
@@ -60,6 +62,8 @@ namespace PetSitters.UiTests
 
         private const string PetName = "Buddy";
         private const string PetBreed = "Labrador";
+        private const string SecondPetName = "Max";
+        private const string SecondPetBreed = "Beagle";
         private const string BookingMessage = "Please look after Buddy while I'm away next weekend.";
         private const string ChatGreeting = "Thanks Olivia, Buddy is booked in!";
 
@@ -117,7 +121,7 @@ namespace PetSitters.UiTests
         [TestMethod]
         [TestCategory("Regression")]
         [TestCategory("EndToEnd")]
-        [TestProperty("Requirements", "FR-A1, FR-A2, FR-O1, FR-O2, FR-O3, FR-O4, FR-S1, FR-S2, FR-S3, FR-S4, FR-S5")]
+        [TestProperty("Requirements", "FR-A1, FR-A2, FR-O1, FR-O2, FR-O3, FR-O4, FR-S1, FR-S2, FR-S3, FR-S4, FR-S5, REQ-PO-07")]
         public void BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen()
         {
             RegisterSitter();
@@ -142,11 +146,14 @@ namespace PetSitters.UiTests
 
             LogInAsOwner();
             ConfirmOwnerSeesAcceptedBooking();
+            CancelTheOnlyBooking();
+            ConfirmCancelledBookingLeftOwnersChats();
         }
 
         /// <summary>
         /// REQ-GR-08 through the real GUI: the owner sends the same sitter two
-        /// requests for the same dates. The sitter accepts one; accepting the
+        /// requests for the same dates, one per pet (the same pet twice would be
+        /// refused by REQ-PO-08). The sitter accepts one; accepting the
         /// other must be refused with a message, and it must stay in the pending
         /// list. The logic tests (BookingServiceTests) prove the rule; this
         /// proves the Accept button is actually routed through it.
@@ -163,10 +170,11 @@ namespace PetSitters.UiTests
 
             RegisterOwner();
             AddPet();
+            AddPet(SecondPetName, SecondPetBreed);
             BookTheSitter();
-            // Selecting the sitter pre-fills today -> tomorrow, and a second click
-            // keeps those dates, so the two requests are guaranteed to overlap.
-            SendAnotherRequestForTheSameDates();
+            // Selecting the sitter pre-fills today -> tomorrow, and the form keeps
+            // those dates, so the two requests are guaranteed to overlap.
+            SendRequestForSameDates(SecondPetName);
             LogOut();
 
             LogInAsSitter();
@@ -190,6 +198,52 @@ namespace PetSitters.UiTests
                 "The refusal should tell the sitter the request stays pending.");
             Assert.AreEqual(1, _app.CountListItems("RequestsList"),
                 "The refused request should remain in the pending list.");
+        }
+
+        /// <summary>
+        /// REQ-PO-08 and REQ-PO-07 (DEF-003) through the real GUI. Booking the
+        /// same pet twice over the same dates is refused. Cancelling the pending
+        /// booking from My Bookings (with confirmation) marks it Cancelled and
+        /// frees the pet, so the same request then goes through. The sitter sees
+        /// only the live request; the cancelled one has left their queue.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("Regression")]
+        [TestCategory("EndToEnd")]
+        [TestProperty("Requirements", "REQ-PO-08, REQ-PO-07")]
+        public void SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst()
+        {
+            RegisterSitter();
+            FillSittingProfile();
+            LogOut();
+
+            RegisterOwner();
+            AddPet();
+            BookTheSitter();
+
+            Step("Try to book the same pet again for the same dates (REQ-PO-08)");
+            _app.ClickButton("Send booking request");
+            StringAssert.Contains(_app.ReadText("BookingStatus"), "This pet already has a pending booking",
+                "A second overlapping booking for the same pet should be refused with an explanation.");
+            _app.SelectTab("My Bookings");
+            Assert.AreEqual(1, _app.CountListItems("BookingsList"),
+                "The refused request must not have been saved.");
+
+            CancelTheOnlyBooking();
+
+            Step("Rebook the same pet and dates now that the first booking is cancelled");
+            _app.SelectTab("Find Sitters");
+            SendRequestForSameDates(PetName);
+            _app.SelectTab("My Bookings");
+            Assert.AreEqual(2, _app.CountListItems("BookingsList"),
+                "The owner's record should keep the cancelled booking alongside the new one.");
+            LogOut();
+
+            LogInAsSitter();
+            Step("Confirm the sitter's queue holds only the live request (REQ-PO-07)");
+            _app.SelectTab("Booking Requests");
+            Assert.AreEqual(1, _app.CountListItems("RequestsList"),
+                "A cancelled booking should no longer appear in the sitter's booking requests.");
         }
 
         /// <summary>
@@ -302,18 +356,23 @@ namespace PetSitters.UiTests
 
         private void AddPet()
         {
-            Step("Add a pet (FR-O3)");
+            AddPet(PetName, PetBreed);
+        }
+
+        private void AddPet(string name, string breed)
+        {
+            Step("Add a pet: " + name + " (FR-O3)");
 
             _app.SelectTab("My Pets");
-            _app.EnterText("PetNameBox", PetName);
+            _app.EnterText("PetNameBox", name);
             _app.EnterText("PetSpeciesBox", "Dog");
-            _app.EnterText("PetBreedBox", PetBreed);
+            _app.EnterText("PetBreedBox", breed);
             _app.EnterText("PetAgeBox", "3");
             _app.EnterText("PetNotesBox", "Needs two walks a day; friendly with other dogs.");
             _app.ClickButton("Add pet");
 
-            Assert.IsTrue(_app.HasText(PetName),
-                "The new pet '" + PetName + "' should appear in the owner's pet list.");
+            Assert.IsTrue(_app.HasText(name),
+                "The new pet '" + name + "' should appear in the owner's pet list.");
         }
 
         private void BookTheSitter()
@@ -336,16 +395,44 @@ namespace PetSitters.UiTests
                 "Sending a booking request should confirm it was sent.");
         }
 
-        private void SendAnotherRequestForTheSameDates()
+        private void SendRequestForSameDates(string petName)
         {
-            Step("Send the same sitter a second request for the same dates");
+            Step("Send the same sitter another request for the same dates, for " + petName);
 
-            // The sitter is still selected and the form keeps its dates, so this
-            // produces a second pending request overlapping the first.
+            // The sitter stays selected and the form keeps its dates, so this
+            // overlaps the earlier request.
+            _app.SelectComboItem("BookingPetCombo", petName);
             _app.ClickButton("Send booking request");
 
             StringAssert.Contains(_app.ReadText("BookingStatus"), "Request sent",
-                "The second request should also be sent - owners may propose; only acceptance is checked.");
+                "The request should be sent: no live booking for " + petName + " overlaps these dates.");
+        }
+
+        /// <summary>Title of the "are you sure?" box shown before cancelling.</summary>
+        private const string CancelConfirmTitle = "Cancel booking";
+
+        private void CancelTheOnlyBooking()
+        {
+            Step("Owner cancels the booking from My Bookings, confirming the prompt (REQ-PO-07)");
+
+            _app.SelectTab("My Bookings");
+            _app.SelectFirstListItem("BookingsList");
+            _app.ClickButton("Cancel booking");
+            _app.ClickDialogButton(CancelConfirmTitle, "Yes");
+
+            StringAssert.Contains(_app.ReadText("CancelStatus"), "cancelled",
+                "Cancelling should confirm the booking was cancelled.");
+            Assert.IsTrue(_app.HasText("Cancelled"),
+                "The booking should now be listed with status Cancelled.");
+        }
+
+        private void ConfirmCancelledBookingLeftOwnersChats()
+        {
+            Step("Confirm the cancelled booking's chat is gone (chat is for accepted bookings only)");
+
+            _app.SelectTab("Chats");
+            Assert.AreEqual(0, _app.CountListItems("ChatsList"),
+                "A cancelled booking should no longer be listed under the owner's chats.");
         }
 
         private void ConfirmOwnerSeesPendingBooking()

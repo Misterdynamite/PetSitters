@@ -8,8 +8,8 @@ requirements traceability matrix, and how to run everything.
 - **What it tests:** the UI-independent logic layer — `Services` (`AuthService`,
   `BookingService`, `ValidationHelper`, `PasswordHasher`), the domain `Models`,
   and the SQLite `Data` repositories.
-- **Result:** **62 test methods → 128 executed cases** (the difference is
-  `[DataRow]` data-driven expansion). All passing (last run 2026-09-26).
+- **Result:** **75 test methods → 153 executed cases** (the difference is
+  `[DataRow]` data-driven expansion). All passing (last run 2026-09-28).
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
   `PetSitters.UiTests` (FlaUI) project.
 
@@ -89,16 +89,18 @@ app, so they can run in any order (or in parallel) safely.
 | `Nights_IsDateSpan_WithMinimumOfOne` | Boundary-value analysis on the "minimum 1 night" clamp (0→1, 1→1, 3→3, 7→7) | 4 |
 | `EstimatedTotal_IsNightsTimesDailyRate` | nights × daily-rate cost, incl. the clamped case | 4 |
 
-#### `BookingOverlapTests` — 3 methods / 13 cases · REQ-GR-08
+#### `BookingOverlapTests` — 5 methods / 22 cases · REQ-GR-08, REQ-PO-08
 | Test | Technique | Cases |
 |------|-----------|-------|
 | `RangesOverlap_AgainstAcceptedBooking` | Boundary-value analysis around a 10th→13th booking: inside, surrounding, each edge, and back-to-back on both sides (hand-back day = next start day is **not** a clash) | 11 |
 | `RangesOverlap_IsSymmetric` | Overlap does not depend on which booking is checked first | 1 |
 | `RangesOverlap_IgnoresTimeOfDay` | Only dates are compared, since the form captures dates, not times | 1 |
+| `SharesPetWith_TreatsAllMyPetsAsEveryPet` | REQ-PO-08 pet matching: same / different pet, and "All my pets" (null) against a pet or itself | 5 |
+| `IsActive_OnlyForPendingAndAccepted` | Equivalence partition over statuses: only live bookings hold a pet's or sitter's time | 4 |
 
 ### Component / integration tests (real isolated SQLite)
 
-#### `BookingServiceTests` — 7 methods / 9 cases · REQ-GR-08, REQ-PS-03
+#### `BookingServiceTests` — 18 methods / 25 cases · REQ-GR-08, REQ-PS-03, REQ-PO-08, REQ-PO-07
 | Test | What it verifies |
 |------|------------------|
 | `AcceptRequest_WithNoClash_AcceptsAndPersists` | A non-clashing request is accepted and persisted. |
@@ -108,6 +110,17 @@ app, so they can run in any order (or in parallel) safely.
 | `AcceptRequest_OverlapWithAnotherSittersBooking_IsAccepted` | The rule is per sitter. |
 | `AcceptRequest_ForAnotherSittersBooking_IsRejected` | A sitter cannot accept a booking addressed to someone else. |
 | `AcceptRequest_ForANonPendingBooking_IsRejected` | A cancelled booking cannot be revived by accepting it. |
+| `RequestBooking_WithNoClash_IsStoredAsPending` | A clash-free request is saved as Pending. |
+| `RequestBooking_SamePetOverlappingLiveBooking_IsRejectedAndNotStored` `[DataRow ×2]` | REQ-PO-08: same pet, *different* sitter, overlapping a pending or accepted booking, is refused and nothing is saved. |
+| `RequestBooking_SamePetOverlappingInactiveBooking_IsAllowed` `[DataRow ×2]` | Declined / cancelled bookings free the pet. |
+| `RequestBooking_DifferentPetSameDates_IsAllowed` | The rule is per pet. |
+| `RequestBooking_SamePetBackToBack_IsAllowed` | Boundary: hand-back day = next start day. |
+| `RequestBooking_AllMyPets_ClashesWithAnyPet` `[DataRow ×2]` | "All my pets" clashes with a specific pet, in both directions. |
+| `RequestBooking_AnotherOwnersBooking_DoesNotBlock` | The rule is per owner. |
+| `CancelBooking_FromPendingOrAccepted_IsCancelled` `[DataRow ×2]` | REQ-PO-07: both allowed stages persist as Cancelled. |
+| `CancelBooking_FromDeclinedOrCancelled_IsRejected` `[DataRow ×2]` | Finished bookings can't be cancelled; status unchanged. |
+| `CancelBooking_ByAnyoneButTheOwner_IsRejected` | Authorisation: neither another owner nor the sitter can cancel. |
+| `CancelBooking_ThenRebookSamePetAndDates_IsAllowed` | REQ-PO-07 + REQ-PO-08: cancelling frees the pet to be rebooked. |
 
 #### `AuthServiceTests` — 13 methods / 19 cases · FR-A1, FR-A2
 | Test | What it verifies |
@@ -185,6 +198,8 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
 | FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
 | REQ-GR-08 | Sitter cannot accept overlapping bookings (FR-07) | `BookingOverlapTests`; `AcceptRequest_Overlap*`, `AcceptRequest_BackToBack*` (BookingServiceTests); UI: `OverlappingRequests_*` | ✅ Passing |
+| REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
+| REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation

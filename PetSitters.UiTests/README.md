@@ -20,13 +20,15 @@ full job details before deciding) is UI-only presentation, so this project is it
 |------|--------------------|
 | `BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen` | The full two-role workflow (below) |
 | `OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending` | REQ-GR-08: after accepting one of two same-date requests, accepting the other is refused with a "stay pending" message and it remains in the list |
+| `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | REQ-PO-08 + REQ-PO-07: booking the same pet twice is refused; cancelling the pending booking (with confirmation) frees the pet to rebook, and the cancelled one leaves the sitter's queue |
 | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | Failed login shows the generic, non-enumerating message and stays put |
 
 The journey covers: register **Sitter** → personal details → sitting profile →
 register **Owner** → personal details → add pet → browse sitters → **book** →
 owner sees *Pending* → sitter reviews **full job details** in the popup →
 **accepts** → **chat opens and a message sends** → request leaves the pending list
-→ appears under active chats → owner sees *Accepted*.
+→ appears under active chats → owner sees *Accepted* → owner **cancels** the
+accepted booking → it shows *Cancelled* and leaves the owner's chats (REQ-PO-07).
 
 Requirements exercised: FR-A1, FR-A2, FR-O1–FR-O4, FR-S1–FR-S5.
 Not covered: **FR-O5** (owner-side chat) is not implemented in the app yet.

@@ -393,6 +393,14 @@ namespace PetSitters.Views
                 MessageBox.Show("You are not a participant in this booking.");
                 return;
             }
+            // Chat is only open while the booking is accepted (REQ-PO-05/PS-04).
+            // Re-checked here because a chat can stay open after the booking is
+            // cancelled; the chat lists alone only filter what can be opened.
+            if (booking.Status != BookingStatus.Accepted)
+            {
+                MessageBox.Show($"This booking is {booking.Status.ToString().ToLowerInvariant()}, so its chat is closed.");
+                return;
+            }
 
             var msg = new ChatMessage
             {

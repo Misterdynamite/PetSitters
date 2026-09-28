@@ -104,7 +104,7 @@ flowchart TD
 |------|------|----------------|
 | `LoginView` | anyone | Email + password login |
 | `RegisterView` | anyone | Create an Owner or Sitter account (personal details incl. location) |
-| `OwnerDashboardView` | Owner | **My Details** · **My Pets** · **Find Sitters** (browse + request booking) · **My Bookings** |
+| `OwnerDashboardView` | Owner | **My Details** · **My Pets** · **Find Sitters** (browse + request booking) · **My Bookings** (status + cancel) |
 | `SitterDashboardView` | Sitter | **My Details** · **My Sitting Profile** (availability, experience, rate…) · **Booking Requests** (accept/decline) · **My Chats** · hidden **Chat** panel |
 | `JobDetailsWindow` | Sitter | Pop-up showing a request's full pet + owner details before deciding |
 
@@ -230,15 +230,38 @@ return an `AuthResult` (`Success` / `ErrorMessage` / `User`).
 sequenceDiagram
     actor Owner
     participant OD as OwnerDashboardView
+    participant BS as BookingService
     participant BR as BookingRepository
     participant DB as SQLite
 
     Owner->>OD: Find Sitters → pick sitter, pet, dates
     OD->>OD: validate dates (start ≥ today, end > start)
-    OD->>BR: Insert(Booking status=Pending, rate snapshot)
-    BR->>DB: INSERT INTO Bookings
-    OD-->>Owner: "Request sent" + estimated total (nights × rate)
+    OD->>BS: RequestBooking(Booking, rate snapshot)
+    BS->>BR: GetForOwner → any live booking for the same pet overlapping?
+    alt clash (REQ-PO-08)
+        BS-->>OD: Fail("This pet already has a … booking …")
+    else no clash
+        BS->>BR: Insert(status=Pending)
+        BR->>DB: INSERT INTO Bookings
+        OD-->>Owner: "Request sent" + estimated total (nights × rate)
+    end
 ```
+
+**REQ-PO-08:** a pet cannot have two *live* (pending or accepted) bookings over
+overlapping dates, with the same sitter or different ones. "All my pets"
+(`PetId` null) counts as every pet, so it clashes with any of that owner's
+bookings (`Booking.SharesPetWith`). Declined and cancelled bookings free the pet.
+A pending request blocks too, so to switch sitters the owner cancels it first.
+
+### Owner cancels a booking (REQ-PO-07)
+
+**My Bookings → Cancel booking** asks for confirmation, then calls
+`BookingService.CancelBooking`. Only the booking's owner can cancel, and only
+from Pending or Accepted. The row is kept with status **Cancelled**, so it
+stays on the owner's list but leaves the sitter's request queue and both
+parties' chat lists. If its chat is open, the owner's Chat tab is closed. Both
+dashboards' **Send** re-checks that the booking is still Accepted, so a chat
+left open after a cancellation cannot keep receiving messages.
 
 ### Sitter responds and chats (FR-S4 / FR-S5)
 

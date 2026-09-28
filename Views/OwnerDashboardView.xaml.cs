@@ -307,7 +307,15 @@ namespace PetSitters.Views
                 DailyRateAtBooking = row.DailyRate,
                 CreatedUtc = DateTime.UtcNow
             };
-            _services.Bookings.Insert(booking);
+
+            // Goes through BookingService so REQ-PO-08 (no overlapping bookings
+            // for the same pet) is enforced; nothing is saved when refused.
+            BookingResult result = _services.BookingActions.RequestBooking(booking);
+            if (!result.Success)
+            {
+                BookingStatus.Text = result.ErrorMessage;
+                return;
+            }
 
             BookingStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
             BookingStatus.Text = $"Request sent to {row.Name}. Estimated total {Currency(booking.EstimatedTotal)} " +
@@ -338,6 +346,44 @@ namespace PetSitters.Views
             BookingsList.ItemsSource = rows;
             // Keep chats list in sync with bookings view
             LoadChats();
+        }
+
+        // ---- REQ-PO-07: owner cancels a booking ------------------------------------
+        private void CancelBooking_Click(object sender, RoutedEventArgs e)
+        {
+            CancelStatus.Foreground = (System.Windows.Media.Brush)FindResource("Danger");
+
+            if (!(BookingsList.SelectedItem is OwnerBookingRow row))
+            {
+                CancelStatus.Text = "Select a booking to cancel.";
+                return;
+            }
+
+            // Cancelling can't be undone, so confirm first. Owned by this window
+            // so it stays on top of the app (and UI tests find it as its child).
+            MessageBoxResult answer = MessageBox.Show(Window.GetWindow(this),
+                $"Cancel your booking with {row.SitterName} for {row.DateRange}?",
+                "Cancel booking", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes)
+                return;
+
+            BookingResult result = _services.BookingActions.CancelBooking(row.BookingId, Me.Id);
+            if (!result.Success)
+            {
+                CancelStatus.Text = result.ErrorMessage;
+                return;
+            }
+
+            // A cancelled booking has no chat (REQ-PO-05): close it if it is open.
+            if (_activeChatBookingId == row.BookingId)
+            {
+                _activeChatBookingId = null;
+                ChatTab.Visibility = Visibility.Collapsed;
+            }
+
+            LoadBookings();   // also reloads the chat list, dropping this booking
+            CancelStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
+            CancelStatus.Text = $"Booking with {row.SitterName} cancelled.";
         }
 
         // ---- Chats for owner (and owners who are also sitters) ------------------
@@ -437,6 +483,14 @@ namespace PetSitters.Views
             if (booking == null)
             {
                 MessageBox.Show("You are not a participant in this booking.");
+                return;
+            }
+            // Chat is only open while the booking is accepted (REQ-PO-05/PS-04).
+            // Re-checked here because a chat can stay open after the booking is
+            // cancelled; the chat lists alone only filter what can be opened.
+            if (booking.Status != PetSitters.Models.BookingStatus.Accepted)
+            {
+                MessageBox.Show($"This booking is {booking.Status.ToString().ToLowerInvariant()}, so its chat is closed.");
                 return;
             }
 

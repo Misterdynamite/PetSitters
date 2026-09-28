@@ -63,6 +63,28 @@ namespace PetSitters.Models
         }
 
         /// <summary>
+        /// True if both bookings could involve the same animal (REQ-PO-08).
+        /// A null <see cref="PetId"/> means "all my pets", so it shares a pet
+        /// with every other booking by the same owner. Callers compare only
+        /// bookings of ONE owner: pet ids are per-owner, so this means nothing
+        /// across owners.
+        /// </summary>
+        public bool SharesPetWith(Booking other)
+        {
+            if (other == null) throw new ArgumentNullException(nameof(other));
+            return !PetId.HasValue || !other.PetId.HasValue || PetId.Value == other.PetId.Value;
+        }
+
+        /// <summary>
+        /// True while a booking is still "live" - it holds the sitter's and the
+        /// pet's time. Declined and cancelled bookings no longer do.
+        /// </summary>
+        public bool IsActive
+        {
+            get { return Status == BookingStatus.Pending || Status == BookingStatus.Accepted; }
+        }
+
+        /// <summary>
         /// The overlap rule itself, kept static so it can be unit tested with
         /// boundary values without building whole bookings.
         /// </summary>
