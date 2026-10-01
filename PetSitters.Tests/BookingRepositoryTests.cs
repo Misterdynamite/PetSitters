@@ -19,6 +19,9 @@ namespace PetSitters.Tests
         private int _petId;
 
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-05
         public void Insert_BookingIsVisibleToBothOwnerAndSitter()
         {
@@ -40,6 +43,8 @@ namespace PetSitters.Tests
         // branch cannot hide the other behind it.
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-04
         public void UpdateStatus_Accept_IsPersisted()
         {
@@ -52,6 +57,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-04
         public void UpdateStatus_Decline_IsPersisted()
         {
@@ -71,6 +78,8 @@ namespace PetSitters.Tests
         /// partition over the states a cancel is allowed from.
         /// </summary>
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         [DataRow(BookingStatus.Pending)]
         [DataRow(BookingStatus.Accepted)]
         public void UpdateStatus_Cancel_IsPersistedFromEitherStage(BookingStatus stageBeforeCancelling)
@@ -93,6 +102,8 @@ namespace PetSitters.Tests
         /// the owner's record rather than vanishing.
         /// </summary>
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void UpdateStatus_Cancel_RemovesBookingFromSittersPendingQueue()
         {
             GivenOwnerSitterAndPet();
@@ -111,6 +122,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         public void GetForSitter_DoesNotReturnAnotherSittersBookings()
         {
             GivenOwnerSitterAndPet();
@@ -124,6 +138,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Insert_PreservesDailyRateSnapshot()
         {
             GivenOwnerSitterAndPet();

@@ -121,6 +121,9 @@ namespace PetSitters.UiTests
         /// details, accepts, and chats. This is the primary regression check.
         /// </summary>
         [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Positive")]
         [TestCategory("Regression")]
         [TestCategory("EndToEnd")]
         [TestProperty("Requirements", "FR-A1, FR-A2, FR-O1, FR-O2, FR-O3, FR-O4, FR-S1, FR-S2, FR-S3, FR-S4, FR-S5, REQ-PO-07")]
@@ -161,6 +164,9 @@ namespace PetSitters.UiTests
         /// proves the Accept button is actually routed through it.
         /// </summary>
         [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Negative")]
         [TestCategory("Regression")]
         [TestCategory("EndToEnd")]
         [TestProperty("Requirements", "REQ-GR-08, REQ-PS-03")]
@@ -210,6 +216,10 @@ namespace PetSitters.UiTests
         /// only the live request; the cancelled one has left their queue.
         /// </summary>
         [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
         [TestCategory("Regression")]
         [TestCategory("EndToEnd")]
         [TestProperty("Requirements", "REQ-PO-08, REQ-PO-07")]
@@ -256,6 +266,11 @@ namespace PetSitters.UiTests
         /// dashboard.
         /// </summary>
         [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Usability")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
         [TestCategory("Regression")]
         [TestCategory("EndToEnd")]
         [TestProperty("Requirements", "REQ-GR-06, FR-A1, FR-A2")]
@@ -297,6 +312,12 @@ namespace PetSitters.UiTests
         /// is wired to those rules.
         /// </summary>
         [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Usability")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [TestCategory("Regression")]
         [TestCategory("EndToEnd")]
         [TestProperty("Requirements", "REQ-GR-04, REQ-PO-04")]
@@ -350,6 +371,10 @@ namespace PetSitters.UiTests
         /// user on the login screen rather than routing into a dashboard.
         /// </summary>
         [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        [TestCategory("ErrorHandling")]
         [TestCategory("Regression")]
         [TestProperty("Requirements", "FR-A2")]
         public void Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin()

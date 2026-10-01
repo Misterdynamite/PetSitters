@@ -26,6 +26,9 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
         [DataRow(0, 1)]    // same start/end date -> clamped up to a minimum of 1 night
         [DataRow(1, 1)]    // one day apart -> 1 night
         [DataRow(3, 3)]    // three days apart -> 3 nights
@@ -38,6 +41,9 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
         [DataRow(1, 45.0, 45.0)]     // 1 night  x $45  = $45
         [DataRow(3, 40.0, 120.0)]    // 3 nights x $40  = $120
         [DataRow(2, 55.5, 111.0)]    // 2 nights x $55.50 = $111

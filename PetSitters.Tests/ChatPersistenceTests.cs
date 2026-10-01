@@ -46,6 +46,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-06
         public void Message_IsPersisted_AndReadBackByAFreshRepository()
         {
@@ -68,6 +71,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         public void GetForBooking_ReturnsOnlyThatBookingsMessages()
         {
             int bookingA = NewAcceptedBooking();
@@ -83,6 +89,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void GetForBooking_ReturnsMessagesInChronologicalOrder()
         {
             int bookingId = NewAcceptedBooking();

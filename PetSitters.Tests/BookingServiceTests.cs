@@ -33,6 +33,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // REQ-PS-03
         public void AcceptRequest_WithNoClash_AcceptsAndPersists()
         {
@@ -45,6 +48,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         // REQ-GR-08 / FR-07: Olivia's booking accepted, Olive requests the same dates.
         public void AcceptRequest_OverlappingAnAcceptedBooking_IsRejectedAndStaysPending()
         {
@@ -64,6 +69,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
         // REQ-GR-08 boundary: hand-back day == next start day is not a clash.
         public void AcceptRequest_BackToBackWithAcceptedBooking_IsAccepted()
         {
@@ -81,6 +89,8 @@ namespace PetSitters.Tests
         /// cancelled bookings are equivalence partitions that must not.
         /// </summary>
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         [DataRow(BookingStatus.Pending)]
         [DataRow(BookingStatus.Declined)]
         [DataRow(BookingStatus.Cancelled)]
@@ -97,6 +107,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // REQ-GR-08 is per sitter: another sitter's accepted booking is irrelevant.
         public void AcceptRequest_OverlapWithAnotherSittersBooking_IsAccepted()
         {
@@ -110,6 +122,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         // REQ-PS-03: "The sitter can also only address bookings that are assigned to them".
         public void AcceptRequest_ForAnotherSittersBooking_IsRejected()
         {
@@ -124,6 +139,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         public void AcceptRequest_ForANonPendingBooking_IsRejected()
         {
             Booking booking = Request(_ownerId, startDay: 10, endDay: 13);
@@ -138,6 +155,8 @@ namespace PetSitters.Tests
         // ---- REQ-PO-08: owner cannot double-book the same pet ----
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // REQ-PO-04
         public void RequestBooking_WithNoClash_IsStoredAsPending()
         {
@@ -154,6 +173,8 @@ namespace PetSitters.Tests
         /// over overlapping dates. Both live states block.
         /// </summary>
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         [DataRow(BookingStatus.Pending)]
         [DataRow(BookingStatus.Accepted)]
         public void RequestBooking_SamePetOverlappingLiveBooking_IsRejectedAndNotStored(BookingStatus existingStatus)
@@ -171,6 +192,8 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         [DataRow(BookingStatus.Declined)]
         [DataRow(BookingStatus.Cancelled)]
         public void RequestBooking_SamePetOverlappingInactiveBooking_IsAllowed(BookingStatus existingStatus)
@@ -185,6 +208,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void RequestBooking_DifferentPetSameDates_IsAllowed()
         {
             int rex = AddPet(_ownerId, "Rex");
@@ -195,6 +220,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
         public void RequestBooking_SamePetBackToBack_IsAllowed()
         {
             int rex = AddPet(_ownerId, "Rex");
@@ -205,6 +233,8 @@ namespace PetSitters.Tests
 
         /// <summary>"All my pets" (null PetId) clashes with any pet, in both directions.</summary>
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         [DataRow(true, false, DisplayName = "Existing all-pets booking blocks a specific pet")]
         [DataRow(false, true, DisplayName = "Existing specific-pet booking blocks an all-pets request")]
         public void RequestBooking_AllMyPets_ClashesWithAnyPet(bool existingIsAllPets, bool newIsAllPets)
@@ -220,6 +250,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // The rule is per owner: another owner's all-pets booking is irrelevant.
         public void RequestBooking_AnotherOwnersBooking_DoesNotBlock()
         {
@@ -232,6 +264,8 @@ namespace PetSitters.Tests
         // ---- REQ-PO-07 / DEF-003: owner cancels a booking ----
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         [DataRow(BookingStatus.Pending)]
         [DataRow(BookingStatus.Accepted)]
         public void CancelBooking_FromPendingOrAccepted_IsCancelled(BookingStatus stage)
@@ -246,6 +280,8 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         [DataRow(BookingStatus.Declined)]
         [DataRow(BookingStatus.Cancelled)]
         public void CancelBooking_FromDeclinedOrCancelled_IsRejected(BookingStatus stage)
@@ -260,6 +296,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         // Authorisation: an owner cannot cancel someone else's booking, nor can the sitter.
         public void CancelBooking_ByAnyoneButTheOwner_IsRejected()
         {
@@ -271,6 +310,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // REQ-PO-07 + REQ-PO-08 together: cancelling frees the pet to be rebooked.
         public void CancelBooking_ThenRebookSamePetAndDates_IsAllowed()
         {

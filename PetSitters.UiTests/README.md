@@ -35,6 +35,11 @@ accepted booking → it shows *Cancelled* and leaves the owner's chats (REQ-PO-0
 Requirements exercised: FR-A1, FR-A2, FR-O1–FR-O4, FR-S1–FR-S5.
 Not covered: **FR-O5** (owner-side chat) is not implemented in the app yet.
 
+Every test is labelled `System` + `Regression`, plus `Acceptance` / `Security` /
+`Usability` and scenario labels (`Positive`, `Negative`, `Boundary`,
+`InvalidInput`, `ErrorHandling`) where they apply. See "Test classification" in
+`docs/UnitTests.md`.
+
 ## Clean database every run — core to the suite
 
 Before launching the app, **every test** deletes the live database at

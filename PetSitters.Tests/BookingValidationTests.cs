@@ -40,6 +40,10 @@ namespace PetSitters.Tests
         // ---- start date ----
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         // REQ-GR-04: days relative to "today" (10 Mar 2030).
         [DataRow(-1, false, DisplayName = "Yesterday is rejected")]
         [DataRow(0, true, DisplayName = "Today is allowed (dates only, judged by day)")]
@@ -56,6 +60,9 @@ namespace PetSitters.Tests
         // ---- end after start ----
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow(0, DisplayName = "End equals start")]
         [DataRow(-1, DisplayName = "End before start")]
         public void Validate_EndNotAfterStart_IsRejected(int endOffsetDays)
@@ -70,6 +77,10 @@ namespace PetSitters.Tests
         // ---- duration: 1 hour .. 14 days ----
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow(59, false, DisplayName = "59 minutes is rejected")]
         [DataRow(60, true, DisplayName = "Exactly 1 hour is allowed")]
         [DataRow(61, true, DisplayName = "61 minutes is allowed")]
@@ -83,6 +94,10 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow(13, true, DisplayName = "13 days is allowed")]
         [DataRow(14, true, DisplayName = "Exactly 14 days is allowed")]
         [DataRow(15, false, DisplayName = "15 days is rejected")]
@@ -96,6 +111,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         public void Validate_FourteenDaysAndOneMinute_IsRejected()
         {
             DateTime start = Now.Date.AddDays(1);
@@ -108,6 +126,9 @@ namespace PetSitters.Tests
         // ---- pet selected ----
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("Negative")]
         // "No pet selected": "All my pets" is meaningless when the owner has none.
         public void Validate_AllMyPets_WhenOwnerHasNoPets_IsRejected()
         {
@@ -119,12 +140,17 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Validate_AllMyPets_WhenOwnerHasPets_IsAllowed()
         {
             Assert.IsNull(_service.ValidateRequest(Request(Now.Date.AddDays(1), Now.Date.AddDays(2), petId: null)));
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("InvalidInput")]
         // Authorisation/data integrity: a pet id that isn't the owner's (another
         // owner's, or deleted) is not a valid selection.
         public void Validate_PetBelongingToAnotherOwner_IsRejected()
@@ -141,6 +167,9 @@ namespace PetSitters.Tests
         // ---- wired into RequestBooking ----
 
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // REQ-GR-04 "A valid submission is accepted."
         public void RequestBooking_ValidSubmission_IsStoredAsPending()
         {
@@ -151,6 +180,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("ErrorHandling")]
         public void RequestBooking_InvalidSubmission_IsRejectedAndNotStored()
         {
             BookingResult result = _service.RequestBooking(Request(Now.Date.AddDays(-2), Now.Date.AddDays(1)));

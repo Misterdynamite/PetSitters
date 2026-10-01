@@ -32,6 +32,9 @@ namespace PetSitters.Tests
         // ---- FR-A1: account creation ----
         // FR-03
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Register_WithValidDetails_Succeeds()
         {
             AuthResult result = RegisterOwner();
@@ -43,6 +46,9 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("Negative")]
         [DataRow("notanemail")]
         [DataRow("missing@domain")]
         [DataRow("")]
@@ -55,6 +61,10 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         public void Register_WithWeakPassword_Fails()
         {
             // 5 characters -> below the 6-character minimum (boundary).
@@ -65,6 +75,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
         public void Register_WithEmptyName_Fails()
         {
             AuthResult result = Services.Auth.Register("olivia@test.com", "secret1", UserRole.Owner,
@@ -74,6 +86,8 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
         [DataRow("")]
         [DataRow("   ")]
         public void Register_WithEmptyPhone_Fails(string phone)
@@ -86,6 +100,8 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
         [DataRow("")]
         [DataRow("   ")]
         public void Register_WithEmptyLocation_Fails(string location)
@@ -97,6 +113,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Register_WithAllFieldsSupplied_PersistsPhoneAndLocation()
         {
             AuthResult result = RegisterOwner();
@@ -108,6 +126,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         public void Register_DuplicateEmail_Fails_CaseInsensitive()
         {
             RegisterOwner("olivia@test.com");
@@ -120,6 +140,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Positive")]
         public void Register_StoresHashedPassword_NotPlainText()
         {
             // Security: the persisted row must not contain the raw password.
@@ -135,6 +158,10 @@ namespace PetSitters.Tests
         // FR-08
 
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Performance")]
+        [TestCategory("Positive")]
         public void Login_WithCorrectCredentials_SucceedsWithinPerformanceBudget()
         {
             RegisterOwner("olivia@test.com", "secret1");
@@ -169,6 +196,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         public void Login_WithWrongPassword_Fails()
         {
             RegisterOwner("olivia@test.com", "secret1");
@@ -179,6 +209,9 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("Negative")]
         [DataRow("", "")]
         [DataRow("olivia@test.com", "")]
         [DataRow("", "secret1")]
@@ -190,6 +223,10 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        [TestCategory("ErrorHandling")]
         public void Login_DoesNotRevealWhetherEmailIsRegistered()
         {
             // Security (no user enumeration): a wrong password on a known account

@@ -254,3 +254,189 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | **Reliability** | Bookings and messages persist and read back intact; status changes are durable. |
 | **Data quality** | Email/password/rate/age validation via boundary and equivalence tests. |
 | **Maintainability / testability** | Logic is UI-independent and tested directly; isolated temp databases keep tests deterministic. |
+
+
+---
+
+## Test classification (type × scenario)
+
+Every automated test, in both `PetSitters.Tests` and `PetSitters.UiTests`,
+carries MSTest `[TestCategory]` labels on two axes, so the suite can be
+reported and run by kind. Labels were assigned on 2026-10-01 from what each
+test actually asserts.
+
+**Test type**: what level or quality attribute the test exercises:
+
+| Label | Meaning here |
+|-------|--------------|
+| `Unit` | Pure logic, no database or UI (`ValidationHelper`, `PasswordHasher`, `Booking` rules, pet age). |
+| `Integration` | Runs against a real, isolated SQLite file (repositories, `AuthService`, `BookingService`, migration). |
+| `System` | Drives the real `PetSitters.exe` end to end through UI Automation (FlaUI). |
+| `Acceptance` | System tests that walk a requirement's acceptance criteria (REQ-xx-nn) as a user would. |
+| `Regression` | Re-run after every build to catch breakage: the whole UI suite, plus the migration data-loss guard. |
+| `Security` | Hashing/salting, no plaintext, no user enumeration, data isolation and authorisation (acting on someone else's data). |
+| `Performance` | Timed against a budget (sign-in < 1 s, REQ-NFR-02). |
+| `Usability` | Checks the user is told what to do (specific validation messages, the Owner/Sitter prompt). |
+| `Smoke` | The 8-test sanity slice through the core journey, run first by the build and CI (see [CI.md](CI.md)). |
+
+**Scenario**: what kind of input or condition the test covers:
+
+| Label | Meaning here |
+|-------|--------------|
+| `Positive` | Valid input → expected success. |
+| `Negative` | Well-formed input that a business rule correctly refuses (wrong password, overlap, duplicate, not your booking). |
+| `Boundary` | Values on and either side of a limit (6-char password, 0–11 months, 1 hour, 14 days, back-to-back dates, today). |
+| `InvalidInput` | Malformed, missing or out-of-range input (bad email, blank fields, non-numbers, negative values, no pet). |
+| `ErrorHandling` | Genuine error conditions handled safely: null/missing/tampered stored data, missing records, a database constraint violation, failed sign-in, nothing saved on rejection. |
+
+A test can carry several labels; data-driven tests that mix valid and invalid
+rows are labelled with each kind they contain.
+
+### Coverage by label
+
+| Label | Methods | Executed cases |
+|-------|--------:|---------------:|
+| Unit | 23 | 87 |
+| Integration | 73 | 97 |
+| System | 6 | 6 |
+| Acceptance | 5 | 5 |
+| Regression | 8 | 8 |
+| Security | 19 | 23 |
+| Performance | 1 | 1 |
+| Usability | 2 | 2 |
+| Smoke | 8 | 8 |
+| Accessibility | 0 | 0 |
+| Positive | 67 | 143 |
+| Negative | 29 | 54 |
+| Boundary | 19 | 79 |
+| InvalidInput | 22 | 69 |
+| ErrorHandling | 9 | 13 |
+
+(Totals across labels exceed the 184 logic + 6 UI cases because tests carry several labels.)
+
+**Known gaps (stated, not hidden):**
+- **Accessibility: none.** REQ-NFR-04 isn't implemented or assessed yet; the
+  planned method is a Nielsen-heuristic review, which is manual.
+- **Usability is thin.** The two UI tests only check that messages are shown;
+  the planned KLM benchmark for REQ-NFR-01 is not automated.
+- **Performance covers sign-in only.** The high-load E2E test in the milestone
+  plan does not exist yet.
+
+### Running by label
+
+```
+dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Boundary"
+dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Security|TestCategory=ErrorHandling"
+dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Unit&TestCategory=InvalidInput"
+```
+
+In Visual Studio, Test Explorer → **Group By → Traits** shows the same labels.
+
+### Appendix: every test and its labels
+
+Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd` tag is omitted.
+
+| Class | Test | Cases | Type | Scenario |
+|-------|------|------:|------|----------|
+| `AuthServiceTests` | `Register_WithValidDetails_Succeeds` | 1 | Smoke, Integration | Positive |
+| `AuthServiceTests` | `Register_WithInvalidEmail_Fails` | 3 | Integration | InvalidInput, Negative |
+| `AuthServiceTests` | `Register_WithWeakPassword_Fails` | 1 | Integration, Security | Boundary, InvalidInput |
+| `AuthServiceTests` | `Register_WithEmptyName_Fails` | 1 | Integration | InvalidInput |
+| `AuthServiceTests` | `Register_WithEmptyPhone_Fails` | 2 | Integration | InvalidInput |
+| `AuthServiceTests` | `Register_WithEmptyLocation_Fails` | 2 | Integration | InvalidInput |
+| `AuthServiceTests` | `Register_WithAllFieldsSupplied_PersistsPhoneAndLocation` | 1 | Integration | Positive |
+| `AuthServiceTests` | `Register_DuplicateEmail_Fails_CaseInsensitive` | 1 | Integration | Negative |
+| `AuthServiceTests` | `Register_StoresHashedPassword_NotPlainText` | 1 | Integration, Security | Positive |
+| `AuthServiceTests` | `Login_WithCorrectCredentials_SucceedsWithinPerformanceBudget` | 1 | Smoke, Integration, Performance | Positive |
+| `AuthServiceTests` | `Login_WithWrongPassword_Fails` | 1 | Integration, Security | Negative |
+| `AuthServiceTests` | `Login_WithMissingInput_Fails` | 3 | Integration | InvalidInput, Negative |
+| `AuthServiceTests` | `Login_DoesNotRevealWhetherEmailIsRegistered` | 1 | Integration, Security | Negative, ErrorHandling |
+| `BookingCalculationTests` | `Nights_IsDateSpan_WithMinimumOfOne` | 4 | Unit | Positive, Boundary |
+| `BookingCalculationTests` | `EstimatedTotal_IsNightsTimesDailyRate` | 4 | Unit | Positive, Boundary |
+| `BookingOverlapTests` | `RangesOverlap_AgainstAcceptedBooking` | 11 | Unit | Positive, Negative, Boundary |
+| `BookingOverlapTests` | `RangesOverlap_IsSymmetric` | 1 | Unit | Positive |
+| `BookingOverlapTests` | `SharesPetWith_TreatsAllMyPetsAsEveryPet` | 5 | Unit | Positive, Negative |
+| `BookingOverlapTests` | `IsActive_OnlyForPendingAndAccepted` | 4 | Unit | Positive, Negative |
+| `BookingOverlapTests` | `RangesOverlap_IgnoresTimeOfDay` | 1 | Unit | Boundary |
+| `BookingRepositoryTests` | `Insert_BookingIsVisibleToBothOwnerAndSitter` | 1 | Smoke, Integration | Positive |
+| `BookingRepositoryTests` | `UpdateStatus_Accept_IsPersisted` | 1 | Integration | Positive |
+| `BookingRepositoryTests` | `UpdateStatus_Decline_IsPersisted` | 1 | Integration | Positive |
+| `BookingRepositoryTests` | `UpdateStatus_Cancel_IsPersistedFromEitherStage` | 2 | Integration | Positive |
+| `BookingRepositoryTests` | `UpdateStatus_Cancel_RemovesBookingFromSittersPendingQueue` | 1 | Integration | Positive |
+| `BookingRepositoryTests` | `GetForSitter_DoesNotReturnAnotherSittersBookings` | 1 | Integration, Security | Negative |
+| `BookingRepositoryTests` | `Insert_PreservesDailyRateSnapshot` | 1 | Integration | Positive |
+| `BookingServiceTests` | `AcceptRequest_WithNoClash_AcceptsAndPersists` | 1 | Smoke, Integration | Positive |
+| `BookingServiceTests` | `AcceptRequest_OverlappingAnAcceptedBooking_IsRejectedAndStaysPending` | 1 | Integration | Negative |
+| `BookingServiceTests` | `AcceptRequest_BackToBackWithAcceptedBooking_IsAccepted` | 1 | Integration | Positive, Boundary |
+| `BookingServiceTests` | `AcceptRequest_OverlappingANonAcceptedBooking_IsAccepted` | 3 | Integration | Positive |
+| `BookingServiceTests` | `AcceptRequest_OverlapWithAnotherSittersBooking_IsAccepted` | 1 | Integration | Positive |
+| `BookingServiceTests` | `AcceptRequest_ForAnotherSittersBooking_IsRejected` | 1 | Integration, Security | Negative |
+| `BookingServiceTests` | `AcceptRequest_ForANonPendingBooking_IsRejected` | 1 | Integration | Negative |
+| `BookingServiceTests` | `RequestBooking_WithNoClash_IsStoredAsPending` | 1 | Integration | Positive |
+| `BookingServiceTests` | `RequestBooking_SamePetOverlappingLiveBooking_IsRejectedAndNotStored` | 2 | Integration | Negative |
+| `BookingServiceTests` | `RequestBooking_SamePetOverlappingInactiveBooking_IsAllowed` | 2 | Integration | Positive |
+| `BookingServiceTests` | `RequestBooking_DifferentPetSameDates_IsAllowed` | 1 | Integration | Positive |
+| `BookingServiceTests` | `RequestBooking_SamePetBackToBack_IsAllowed` | 1 | Integration | Positive, Boundary |
+| `BookingServiceTests` | `RequestBooking_AllMyPets_ClashesWithAnyPet` | 2 | Integration | Negative |
+| `BookingServiceTests` | `RequestBooking_AnotherOwnersBooking_DoesNotBlock` | 1 | Integration | Positive |
+| `BookingServiceTests` | `CancelBooking_FromPendingOrAccepted_IsCancelled` | 2 | Integration | Positive |
+| `BookingServiceTests` | `CancelBooking_FromDeclinedOrCancelled_IsRejected` | 2 | Integration | Negative |
+| `BookingServiceTests` | `CancelBooking_ByAnyoneButTheOwner_IsRejected` | 1 | Integration, Security | Negative |
+| `BookingServiceTests` | `CancelBooking_ThenRebookSamePetAndDates_IsAllowed` | 1 | Integration | Positive |
+| `BookingValidationTests` | `Validate_StartDate_RelativeToToday` | 3 | Integration | Positive, Boundary, InvalidInput |
+| `BookingValidationTests` | `Validate_EndNotAfterStart_IsRejected` | 2 | Integration | Boundary, InvalidInput |
+| `BookingValidationTests` | `Validate_MinimumDuration_Boundary` | 3 | Integration | Positive, Boundary, InvalidInput |
+| `BookingValidationTests` | `Validate_MaximumDuration_Boundary` | 3 | Integration | Positive, Boundary, InvalidInput |
+| `BookingValidationTests` | `Validate_FourteenDaysAndOneMinute_IsRejected` | 1 | Integration | Boundary, InvalidInput |
+| `BookingValidationTests` | `Validate_AllMyPets_WhenOwnerHasNoPets_IsRejected` | 1 | Integration | InvalidInput, Negative |
+| `BookingValidationTests` | `Validate_AllMyPets_WhenOwnerHasPets_IsAllowed` | 1 | Integration | Positive |
+| `BookingValidationTests` | `Validate_PetBelongingToAnotherOwner_IsRejected` | 1 | Integration, Security | InvalidInput |
+| `BookingValidationTests` | `RequestBooking_ValidSubmission_IsStoredAsPending` | 1 | Smoke, Integration | Positive |
+| `BookingValidationTests` | `RequestBooking_InvalidSubmission_IsRejectedAndNotStored` | 1 | Integration | InvalidInput, ErrorHandling |
+| `ChatPersistenceTests` | `Message_IsPersisted_AndReadBackByAFreshRepository` | 1 | Smoke, Integration | Positive |
+| `ChatPersistenceTests` | `GetForBooking_ReturnsOnlyThatBookingsMessages` | 1 | Integration, Security | Negative |
+| `ChatPersistenceTests` | `GetForBooking_ReturnsMessagesInChronologicalOrder` | 1 | Integration | Positive |
+| `DatabaseMigrationTests` | `Initialize_OnPreGr06Database_KeepsAllDataAndAllowsSecondRole` | 1 | Integration, Regression | Positive |
+| `DatabaseMigrationTests` | `Initialize_RunTwice_IsIdempotent` | 1 | Smoke, Integration, Regression | Positive |
+| `PasswordHasherTests` | `CreateHash_ThenVerifyWithCorrectPassword_ReturnsTrue` | 1 | Smoke, Unit, Security | Positive |
+| `PasswordHasherTests` | `Verify_WithWrongPassword_ReturnsFalse` | 1 | Unit, Security | Negative |
+| `PasswordHasherTests` | `CreateHash_IsSalted_SamePasswordProducesDifferentHashes` | 1 | Unit, Security | Positive |
+| `PasswordHasherTests` | `CreateHash_DoesNotStorePasswordInPlainText` | 1 | Unit, Security | Positive |
+| `PasswordHasherTests` | `Verify_WithTamperedHash_ReturnsFalse` | 1 | Unit, Security | Negative, ErrorHandling |
+| `PasswordHasherTests` | `Verify_WithMissingStoredHashOrSalt_ReturnsFalse` | 2 | Unit, Security | InvalidInput, ErrorHandling |
+| `PetAgeTests` | `FormatAge_CombinesYearsAndMonths` | 8 | Unit | Positive, Boundary |
+| `PetAgeTests` | `AgeDisplay_UsesTheStoredYearsAndMonths` | 1 | Unit | Positive |
+| `PetAgeTests` | `AgeMonths_DefaultsToZero_WhenNotSupplied` | 1 | Unit | Positive |
+| `RepositoryTests` | `Insert_AssignsId_AndCanBeFoundByEmailAndId` | 1 | Integration | Positive |
+| `RepositoryTests` | `EmailExists_IsCaseInsensitive` | 1 | Integration | Positive, Negative |
+| `RepositoryTests` | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | 1 | Integration | Positive |
+| `RepositoryTests` | `UpdateDetails_PersistsEditedFields` | 1 | Integration | Positive |
+| `RepositoryTests` | `Insert_ThenGetByOwner_ReturnsThePets` | 1 | Integration | Positive |
+| `RepositoryTests` | `Insert_PersistsYearsAndOptionalMonths` | 1 | Integration | Positive |
+| `RepositoryTests` | `Insert_DefaultsMonthsToZero_WhenNotSupplied` | 1 | Integration | Positive |
+| `RepositoryTests` | `Delete_RemovesOnlyTheSelectedPet` | 1 | Integration | Positive |
+| `RepositoryTests` | `Upsert_InsertsProfile_WhenNoneExists` | 1 | Integration | Positive |
+| `RepositoryTests` | `Upsert_UpdatesInPlace_WhenProfileAlreadyExists` | 1 | Integration | Positive |
+| `RepositoryTests` | `GetByUserId_ReturnsNull_WhenSitterHasNoProfileYet` | 1 | Integration | ErrorHandling |
+| `SharedEmailTests` | `Register_SameEmailForTheOtherRole_Succeeds` | 2 | Integration | Positive |
+| `SharedEmailTests` | `Register_SameEmailSameRole_IsRejectedWithRoleSpecificWarning` | 2 | Integration | Negative |
+| `SharedEmailTests` | `Register_WhenBothRolesExist_RejectsEitherRole` | 1 | Integration | Negative |
+| `SharedEmailTests` | `Insert_DuplicateEmailAndRole_IsRejectedByTheDatabase` | 1 | Integration | Negative, ErrorHandling |
+| `SharedEmailTests` | `Login_SharedEmailSamePassword_AsksWhichRole` | 1 | Integration | Positive |
+| `SharedEmailTests` | `Login_SharedEmailWithChosenRole_OpensThatAccount` | 2 | Integration | Positive |
+| `SharedEmailTests` | `Login_SharedEmailDifferentPasswords_OpensTheMatchingAccount` | 1 | Integration | Positive |
+| `SharedEmailTests` | `Login_SharedEmailFailures_UseTheGenericMessage` | 1 | Integration, Security | Negative |
+| `SharedEmailTests` | `SharedEmail_AccountsAreSeparate` | 1 | Integration, Security | Positive |
+| `ValidationHelperTests` | `IsValidEmail_ClassifiesInputCorrectly` | 9 | Unit | Positive, Boundary, InvalidInput |
+| `ValidationHelperTests` | `IsValidPassword_EnforcesMinimumLengthBoundary` | 4 | Unit, Security | Positive, Boundary, InvalidInput |
+| `ValidationHelperTests` | `IsNonEmpty_DetectsBlankValues` | 4 | Unit | Positive, InvalidInput, ErrorHandling |
+| `ValidationHelperTests` | `TryParseRate_AcceptsOnlyNonNegativeNumbers` | 7 | Unit | Positive, Boundary, InvalidInput |
+| `ValidationHelperTests` | `TryParseAgeMonths_AcceptsBlankOrZeroToEleven` | 9 | Unit | Positive, Boundary, InvalidInput |
+| `ValidationHelperTests` | `TryParseAgeMonths_TreatsNullAsNotSupplied` | 1 | Unit | ErrorHandling |
+| `ValidationHelperTests` | `TryParseNonNegativeInt_AcceptsOnlyWholeNonNegativeNumbers` | 6 | Unit | Positive, Boundary, InvalidInput |
+| `UiRegressionTests` | `BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen` | 1 | System, Acceptance, Regression | Positive |
+| `UiRegressionTests` | `OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending` | 1 | System, Acceptance, Regression | Negative |
+| `UiRegressionTests` | `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | 1 | System, Acceptance, Regression | Positive, Negative |
+| `UiRegressionTests` | `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | 1 | System, Acceptance, Usability, Regression | Positive, Negative |
+| `UiRegressionTests` | `BookingForm_InvalidRequests_AreRejectedWithSpecificMessages` | 1 | System, Acceptance, Usability, Regression | Positive, Boundary, InvalidInput |
+| `UiRegressionTests` | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | 1 | System, Security, Regression | Negative, ErrorHandling |

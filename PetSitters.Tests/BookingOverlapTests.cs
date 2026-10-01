@@ -19,6 +19,10 @@ namespace PetSitters.Tests
         private static readonly DateTime AcceptedEnd = new DateTime(2026, 10, 13);
 
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
+        [TestCategory("Boundary")]
         // REQ-GR-08 / FR-07
         [DataRow(10, 13, true,  DisplayName = "Identical range")]
         [DataRow(11, 12, true,  DisplayName = "Fully inside")]
@@ -40,6 +44,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
         public void RangesOverlap_IsSymmetric()
         {
             DateTime otherStart = new DateTime(2026, 10, 12);
@@ -56,6 +62,9 @@ namespace PetSitters.Tests
         /// since DataRow cannot carry a nullable int.
         /// </summary>
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
         [DataRow(1, 1, true,  DisplayName = "Same pet")]
         [DataRow(1, 2, false, DisplayName = "Different pets")]
         [DataRow(0, 1, true,  DisplayName = "All my pets vs a specific pet")]
@@ -70,6 +79,9 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
         [DataRow(BookingStatus.Pending, true)]
         [DataRow(BookingStatus.Accepted, true)]
         [DataRow(BookingStatus.Declined, false)]
@@ -80,6 +92,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Boundary")]
         public void RangesOverlap_IgnoresTimeOfDay()
         {
             // The form only captures dates; a stray time component (e.g. from

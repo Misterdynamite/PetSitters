@@ -18,6 +18,10 @@ namespace PetSitters.Tests
     {
         // ---- Email: equivalence partitions (valid vs several invalid classes) ----
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow("user@test.com", true)]      // typical valid
         [DataRow("a@b.co", true)]             // minimal valid
         [DataRow("first.last@sub.domain.nz", true)]
@@ -34,6 +38,11 @@ namespace PetSitters.Tests
 
         // ---- Password: boundary-value analysis around MinPasswordLength (6) ----
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow("", false)]         // empty
         [DataRow("12345", false)]    // 5 chars  -> just below the boundary
         [DataRow("123456", true)]    // 6 chars  -> on the boundary (minimum allowed)
@@ -44,6 +53,10 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("ErrorHandling")]
         [DataRow("something", true)]
         [DataRow("  ", false)]
         [DataRow("", false)]
@@ -55,6 +68,10 @@ namespace PetSitters.Tests
 
         // ---- Daily rate: numeric, zero-or-greater ----
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow("0", true)]        // boundary: zero is allowed
         [DataRow("45", true)]
         [DataRow("45.50", true)]
@@ -73,6 +90,10 @@ namespace PetSitters.Tests
 
         // ---- Pet age (months): optional, whole number, boundary 0-11 ----
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow("", true, 0)]      // blank -> optional, treated as 0 months
         [DataRow("   ", true, 0)]   // whitespace -> also treated as not supplied
         [DataRow("0", true, 0)]     // lower boundary
@@ -92,6 +113,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("ErrorHandling")]
         public void TryParseAgeMonths_TreatsNullAsNotSupplied()
         {
             bool ok = ValidationHelper.TryParseAgeMonths(null, out int months);
@@ -102,6 +125,10 @@ namespace PetSitters.Tests
 
         // ---- Age / years of experience: whole number, zero-or-greater ----
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
         [DataRow("0", true)]        // boundary
         [DataRow("3", true)]
         [DataRow("-1", false)]      // negative

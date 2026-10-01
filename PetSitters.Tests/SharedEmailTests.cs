@@ -26,6 +26,8 @@ namespace PetSitters.Tests
 
         /// <summary>Equivalence partition over the two orders an email can gain its second role.</summary>
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         [DataRow(UserRole.Owner, UserRole.Sitter)]
         [DataRow(UserRole.Sitter, UserRole.Owner)]
         // REQ-GR-06
@@ -40,6 +42,8 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         [DataRow(UserRole.Owner, "An owner account with that email already exists")]
         [DataRow(UserRole.Sitter, "A sitter account with that email already exists")]
         // REQ-GR-06: rejected with a warning, and no second account is created.
@@ -55,6 +59,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
         // REQ-GR-06: with both roles taken, a third registration of either role fails.
         public void Register_WhenBothRolesExist_RejectsEitherRole()
         {
@@ -66,6 +72,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        [TestCategory("ErrorHandling")]
         // The (Email, Role) constraint is enforced by the database itself, not
         // only by AuthService, so a bypassing insert cannot create a duplicate.
         public void Insert_DuplicateEmailAndRole_IsRejectedByTheDatabase()
@@ -83,6 +92,8 @@ namespace PetSitters.Tests
         // ---- login ----
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Login_SharedEmailSamePassword_AsksWhichRole()
         {
             Register(UserRole.Owner);
@@ -95,6 +106,8 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         [DataRow(UserRole.Owner)]
         [DataRow(UserRole.Sitter)]
         public void Login_SharedEmailWithChosenRole_OpensThatAccount(UserRole role)
@@ -109,6 +122,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // Different passwords identify the account on their own, so no prompt.
         public void Login_SharedEmailDifferentPasswords_OpensTheMatchingAccount()
         {
@@ -123,6 +138,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         // Security: no user enumeration. Wrong password, or a role with no
         // account, gives the same generic message as an unknown email.
         public void Login_SharedEmailFailures_UseTheGenericMessage()
@@ -141,6 +159,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Positive")]
         // Each role's account keeps its own data: the owner's pets are not the sitter's.
         public void SharedEmail_AccountsAreSeparate()
         {

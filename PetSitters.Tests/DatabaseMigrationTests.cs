@@ -71,6 +71,9 @@ INSERT INTO Bookings (OwnerUserId, SitterUserId, PetId, StartDate, EndDate, Crea
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Regression")]
+        [TestCategory("Positive")]
         // REQ-GR-06 + DEF-001-class risk (data loss): existing rows, ids and
         // relationships survive the rebuild, and the new rule then applies.
         public void Initialize_OnPreGr06Database_KeepsAllDataAndAllowsSecondRole()
@@ -92,6 +95,10 @@ INSERT INTO Bookings (OwnerUserId, SitterUserId, PetId, StartDate, EndDate, Crea
         }
 
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Integration")]
+        [TestCategory("Regression")]
+        [TestCategory("Positive")]
         // Initialize runs on every app start, so the migration must be a no-op the second time.
         public void Initialize_RunTwice_IsIdempotent()
         {

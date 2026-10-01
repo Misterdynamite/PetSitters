@@ -15,6 +15,10 @@ namespace PetSitters.Tests
     public class PasswordHasherTests
     {
         [TestMethod]
+        [TestCategory("Smoke")]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("Positive")]
         public void CreateHash_ThenVerifyWithCorrectPassword_ReturnsTrue()
         {
             // Arrange
@@ -28,6 +32,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
         public void Verify_WithWrongPassword_ReturnsFalse()
         {
             PasswordHasher.CreateHash("secret123", out string hash, out string salt);
@@ -38,6 +45,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("Positive")]
         public void CreateHash_IsSalted_SamePasswordProducesDifferentHashes()
         {
             // Two accounts with the same password must not share a hash,
@@ -50,6 +60,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("Positive")]
         public void CreateHash_DoesNotStorePasswordInPlainText()
         {
             PasswordHasher.CreateHash("secret123", out string hash, out string salt);
@@ -59,6 +72,10 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        [TestCategory("ErrorHandling")]
         public void Verify_WithTamperedHash_ReturnsFalse()
         {
             PasswordHasher.CreateHash("secret123", out string hash, out string salt);
@@ -70,6 +87,10 @@ namespace PetSitters.Tests
         }
 
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Security")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("ErrorHandling")]
         [DataRow(null, null)]
         [DataRow("", "")]
         public void Verify_WithMissingStoredHashOrSalt_ReturnsFalse(string hash, string salt)

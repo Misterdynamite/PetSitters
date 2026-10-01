@@ -28,6 +28,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Insert_AssignsId_AndCanBeFoundByEmailAndId()
         {
             User inserted = NewUser("a@test.com", UserRole.Owner, "Alice");
@@ -38,6 +40,9 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
         public void EmailExists_IsCaseInsensitive()
         {
             NewUser("a@test.com", UserRole.Owner, "Alice");
@@ -47,6 +52,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-01
         public void GetByRole_ReturnsOnlyThatRole_OrderedByName()
         {
@@ -62,6 +69,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-02
         public void UpdateDetails_PersistsEditedFields()
         {
@@ -105,6 +114,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Insert_ThenGetByOwner_ReturnsThePets()
         {
             GivenAnOwner();
@@ -119,6 +130,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Insert_PersistsYearsAndOptionalMonths()
         {
             GivenAnOwner();
@@ -138,6 +151,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Insert_DefaultsMonthsToZero_WhenNotSupplied()
         {
             GivenAnOwner();
@@ -148,6 +163,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Delete_RemovesOnlyTheSelectedPet()
         {
             GivenAnOwner();
@@ -179,6 +196,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Upsert_InsertsProfile_WhenNoneExists()
         {
             GivenASitter();
@@ -201,6 +220,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         public void Upsert_UpdatesInPlace_WhenProfileAlreadyExists()
         {
             GivenASitter();
@@ -215,6 +236,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("ErrorHandling")]
         public void GetByUserId_ReturnsNull_WhenSitterHasNoProfileYet()
         {
             GivenASitter();

@@ -14,6 +14,9 @@ namespace PetSitters.Tests
     public class PetAgeTests
     {
         [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
         [DataRow(2, 3, "2 years 3 months")]   // both parts supplied
         [DataRow(1, 1, "1 year 1 month")]     // singular wording for both
         [DataRow(2, 0, "2 years")]            // months omitted -> years only
@@ -28,6 +31,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
         public void AgeDisplay_UsesTheStoredYearsAndMonths()
         {
             var pet = new Pet { Name = "Rex", Age = 2, AgeMonths = 6 };
@@ -36,6 +41,8 @@ namespace PetSitters.Tests
         }
 
         [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
         public void AgeMonths_DefaultsToZero_WhenNotSupplied()
         {
             // Months are optional: a pet created with only years reads as years.
