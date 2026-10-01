@@ -13,11 +13,26 @@ namespace PetSitters.Services
     /// </summary>
     public class BookingService
     {
-        private readonly BookingRepository _bookings;
+        /// <summary>REQ-GR-04: shortest bookable duration.</summary>
+        public static readonly TimeSpan MinimumDuration = TimeSpan.FromHours(1);
 
-        public BookingService(BookingRepository bookings)
+        /// <summary>REQ-GR-04: longest bookable duration (exactly 14 days is allowed).</summary>
+        public static readonly TimeSpan MaximumDuration = TimeSpan.FromDays(14);
+
+        private readonly BookingRepository _bookings;
+        private readonly PetRepository _pets;
+        private readonly Func<DateTime> _now;
+
+        /// <param name="now">
+        /// Clock used for the "start is in the past" rule. Defaults to the
+        /// system clock; tests inject a fixed time so results don't depend on
+        /// the day they run.
+        /// </param>
+        public BookingService(BookingRepository bookings, PetRepository pets, Func<DateTime> now = null)
         {
             _bookings = bookings ?? throw new ArgumentNullException(nameof(bookings));
+            _pets = pets ?? throw new ArgumentNullException(nameof(pets));
+            _now = now ?? (() => DateTime.Now);
         }
 
         /// <summary>
@@ -54,14 +69,19 @@ namespace PetSitters.Services
         }
 
         /// <summary>
-        /// An owner sends a booking request (REQ-PO-04), unless the same animal
-        /// already has a live booking over overlapping dates, with this sitter
-        /// or any other (REQ-PO-08). On success the booking is stored as Pending.
-        /// Date-range validation (REQ-GR-04) is still done by the form, not here.
+        /// An owner sends a booking request (REQ-PO-04). It must first pass the
+        /// REQ-GR-04 form rules (<see cref="ValidateRequest"/>), then the same
+        /// animal must not already have a live booking over overlapping dates,
+        /// with this sitter or any other (REQ-PO-08). On success the booking is
+        /// stored as Pending; on any rejection nothing is saved.
         /// </summary>
         public BookingResult RequestBooking(Booking booking)
         {
             if (booking == null) throw new ArgumentNullException(nameof(booking));
+
+            string invalid = ValidateRequest(booking);
+            if (invalid != null)
+                return BookingResult.Fail(invalid);
 
             // Both pending and accepted bookings block. A pending request already
             // claims the pet for those dates; to switch sitters, the owner cancels
@@ -86,6 +106,50 @@ namespace PetSitters.Services
             booking.Status = BookingStatus.Pending;
             _bookings.Insert(booking);
             return BookingResult.Ok(booking);
+        }
+
+        /// <summary>
+        /// REQ-GR-04 form rules, checked in the order a user would fix them.
+        /// Returns a specific message for the first rule broken, or null if valid.
+        /// Public so the rules can be tested without touching the database's
+        /// booking rows.
+        /// </summary>
+        public string ValidateRequest(Booking booking)
+        {
+            if (booking == null) throw new ArgumentNullException(nameof(booking));
+
+            // The form captures dates, not times, so "in the past" is judged by
+            // day: a booking starting today is allowed. If time pickers are ever
+            // added, compare against _now() itself instead of its date.
+            if (booking.StartDate.Date < _now().Date)
+                return "Start date cannot be in the past.";
+
+            if (booking.EndDate <= booking.StartDate)
+                return "End date must be after the start date.";
+
+            // Unreachable from the date-only form (end > start means at least a
+            // day), but enforced so the rule holds for any caller and for times.
+            TimeSpan duration = booking.EndDate - booking.StartDate;
+            if (duration < MinimumDuration)
+                return "A booking must be at least 1 hour long.";
+
+            if (duration > MaximumDuration)
+                return "A booking can be at most 14 days long. Choose an earlier end date.";
+
+            // "No pet selected": the request must name one of the owner's pets,
+            // or "All my pets" (null), which only makes sense if they have any.
+            var ownersPets = _pets.GetByOwner(booking.OwnerUserId);
+            if (booking.PetId.HasValue)
+            {
+                if (!ownersPets.Any(p => p.Id == booking.PetId.Value))
+                    return "Please select one of your pets for this booking.";
+            }
+            else if (ownersPets.Count == 0)
+            {
+                return "Please select a pet for this booking. Add your pet under My Pets first.";
+            }
+
+            return null;
         }
 
         /// <summary>

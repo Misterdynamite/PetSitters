@@ -255,10 +255,12 @@ sequenceDiagram
     participant DB as SQLite
 
     Owner->>OD: Find Sitters → pick sitter, pet, dates
-    OD->>OD: validate dates (start ≥ today, end > start)
     OD->>BS: RequestBooking(Booking, rate snapshot)
+    BS->>BS: ValidateRequest (REQ-GR-04: dates, 1 h–14 days, pet selected)
     BS->>BR: GetForOwner → any live booking for the same pet overlapping?
-    alt clash (REQ-PO-08)
+    alt invalid (REQ-GR-04)
+        BS-->>OD: Fail(specific message, e.g. "Start date cannot be in the past.")
+    else clash (REQ-PO-08)
         BS-->>OD: Fail("This pet already has a … booking …")
     else no clash
         BS->>BR: Insert(status=Pending)
@@ -266,6 +268,18 @@ sequenceDiagram
         OD-->>Owner: "Request sent" + estimated total (nights × rate)
     end
 ```
+
+**REQ-GR-04:** `BookingService.ValidateRequest` checks, in order: the start is not
+before today; the end is after the start; the duration is at least **1 hour**
+and at most **14 days** (exactly 14 is allowed); and a pet is selected (one of
+*this owner's* pets, or "All my pets" provided they have at least one). Each rule
+has its own message, and nothing is saved when one fails. The form only captures
+**dates**, so "in the past" is judged by day (a booking starting today is allowed)
+and the 1-hour minimum can't be reached from the form; both are written to also
+hold if time pickers are added later. The service takes an injectable clock so
+tests don't depend on the current date. These checks used to live in the form's
+code-behind; they were moved here so they apply to every caller and can be
+unit-tested.
 
 **REQ-PO-08:** a pet cannot have two *live* (pending or accepted) bookings over
 overlapping dates, with the same sitter or different ones. "All my pets"

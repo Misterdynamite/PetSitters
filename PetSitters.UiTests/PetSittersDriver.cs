@@ -105,6 +105,19 @@ namespace PetSitters.UiTests
         }
 
         /// <summary>
+        /// Sets a WPF DatePicker's date through its UI Automation Value pattern,
+        /// rather than clicking through the calendar popup. The text uses the
+        /// machine's short-date format, which is what the app (same machine,
+        /// same culture) parses it with.
+        /// </summary>
+        public void SetDate(string automationId, DateTime date)
+        {
+            ByName(automationId).Patterns.Value.Pattern.SetValue(
+                date.ToString("d", System.Globalization.CultureInfo.CurrentCulture));
+            Pause();
+        }
+
+        /// <summary>
         /// Types into a WPF PasswordBox. Password boxes intentionally block
         /// programmatic value-setting through UI Automation, so we focus the box
         /// and send real keystrokes instead.

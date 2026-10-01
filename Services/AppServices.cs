@@ -33,7 +33,7 @@ namespace PetSitters.Services
             Bookings = new BookingRepository(database);
             Chats = new ChatRepository(database);
             Auth = new AuthService(Users);
-            BookingActions = new BookingService(Bookings);
+            BookingActions = new BookingService(Bookings, Pets);
         }
 
         /// <summary>Builds the services against the real AppData database.</summary>

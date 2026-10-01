@@ -8,7 +8,7 @@ requirements traceability matrix, and how to run everything.
 - **What it tests:** the UI-independent logic layer — `Services` (`AuthService`,
   `BookingService`, `ValidationHelper`, `PasswordHasher`), the domain `Models`,
   and the SQLite `Data` repositories.
-- **Result:** **86 test methods → 167 executed cases** (the difference is
+- **Result:** **96 test methods → 184 executed cases** (the difference is
   `[DataRow]` data-driven expansion). All passing (last run 2026-10-01).
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
   `PetSitters.UiTests` (FlaUI) project.
@@ -112,6 +112,22 @@ app, so they can run in any order (or in parallel) safely.
 | `Login_SharedEmailDifferentPasswords_OpensTheMatchingAccount` | Different passwords pick the account without a prompt. |
 | `Login_SharedEmailFailures_UseTheGenericMessage` | Wrong password / role with no account give the same message as an unknown email (no enumeration). |
 | `SharedEmail_AccountsAreSeparate` | The two accounts have separate ids and data. |
+
+#### `BookingValidationTests` — 10 methods / 17 cases · REQ-GR-04
+Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so results never depend on the run date.
+
+| Test | Technique | Cases |
+|------|-----------|-------|
+| `Validate_StartDate_RelativeToToday` | Boundary on "today": yesterday rejected; today and tomorrow allowed (judged by day) | 3 |
+| `Validate_EndNotAfterStart_IsRejected` | End equal to / before start | 2 |
+| `Validate_MinimumDuration_Boundary` | 59 / 60 / 61 minutes around the 1-hour minimum | 3 |
+| `Validate_MaximumDuration_Boundary` | 13 / 14 / 15 days around the 14-day maximum | 3 |
+| `Validate_FourteenDaysAndOneMinute_IsRejected` | Just over the maximum | 1 |
+| `Validate_AllMyPets_WhenOwnerHasNoPets_IsRejected` | "No pet selected" | 1 |
+| `Validate_AllMyPets_WhenOwnerHasPets_IsAllowed` | "All my pets" is a valid selection when pets exist | 1 |
+| `Validate_PetBelongingToAnotherOwner_IsRejected` | Another owner's (or a deleted) pet isn't a valid selection | 1 |
+| `RequestBooking_ValidSubmission_IsStoredAsPending` | "A valid submission is accepted" | 1 |
+| `RequestBooking_InvalidSubmission_IsRejectedAndNotStored` | A rejected request saves nothing | 1 |
 
 #### `DatabaseMigrationTests` — 2 methods · REQ-GR-06 (data-loss guard)
 | Test | What it verifies |
@@ -217,6 +233,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
 | FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
 | REQ-GR-08 | Sitter cannot accept overlapping bookings (FR-07) | `BookingOverlapTests`; `AcceptRequest_Overlap*`, `AcceptRequest_BackToBack*` (BookingServiceTests); UI: `OverlappingRequests_*` | ✅ Passing |
+| REQ-GR-04 | Booking dates/duration/pet validated with specific messages | `BookingValidationTests`; UI: `BookingForm_*` | ✅ Passing |
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |

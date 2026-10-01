@@ -18,7 +18,7 @@ QA artefacts and tests matter as much as features.
 | Project | Kind | Framework | Purpose |
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
-| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (167 cases) |
+| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (184 cases) |
 | `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation |
 
 ## Build, test, run — IMPORTANT tooling notes
@@ -69,7 +69,7 @@ without launching a window:
 Models/     POCOs: User, SitterProfile, Pet, Booking, ChatMessage, enums
 Data/       SQLite: Database (schema + connection factory) + one repository per table
 Services/   PasswordHasher (PBKDF2), ValidationHelper, AuthService (+AuthResult),
-            BookingService (+BookingResult): request (REQ-PO-08 same-pet overlap),
+            BookingService (+BookingResult): request (REQ-GR-04 validation, REQ-PO-08 same-pet overlap),
             accept (REQ-GR-08 sitter overlap), cancel (REQ-PO-07),
             AppServices (composition root; holds repos + CurrentUser)
 Views/      WPF UserControls, one per screen, swapped into MainWindow
@@ -113,7 +113,7 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 
 - **UI regression suite fails at the default window size (since the login/register
   redesign, 503e9af/6f33d67).** The 920×640 window clips the password box off
-  screen, so FlaUI throws `NoClickablePointException`. All 5 UI tests pass with the
+  screen, so FlaUI throws `NoClickablePointException`. All 6 UI tests pass with the
   window maximised (checked 2026-10-01). Fix the layout (or add a ScrollViewer)
   rather than maximising in the driver, because real users hit the same clipping.
 

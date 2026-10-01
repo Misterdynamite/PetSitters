@@ -279,17 +279,8 @@ namespace PetSitters.Views
 
             DateTime start = StartDatePicker.SelectedDate.Value.Date;
             DateTime end = EndDatePicker.SelectedDate.Value.Date;
-
-            if (start < DateTime.Today)
-            {
-                BookingStatus.Text = "Start date cannot be in the past.";
-                return;
-            }
-            if (end <= start)
-            {
-                BookingStatus.Text = "End date must be after the start date.";
-                return;
-            }
+            // Date/duration/pet rules (REQ-GR-04) live in BookingService.ValidateRequest,
+            // so they are applied, and unit-tested, in one place.
 
             int? petId = null;
             if (BookingPetCombo.SelectedItem is Pet pet && pet.Id != 0)

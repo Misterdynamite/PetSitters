@@ -24,6 +24,7 @@ namespace PetSitters.UiTests
     ///   REQ-PO-08 same-pet double booking refused, REQ-PO-07 owner cancels
     ///     (SamePetDoubleBooking_* test; the journey also cancels an accepted booking)
     ///   REQ-GR-06 one account per email per role; login asks which (SharedEmail_* test)
+    ///   REQ-GR-04 booking form validation messages (BookingForm_* test)
     ///
     /// Not covered: FR-O5 (owner-side chat) is not implemented in the app yet, so
     /// the journey only exercises chat from the sitter side.
@@ -286,6 +287,61 @@ namespace PetSitters.UiTests
             _app.ClickButton("Log in");
             Assert.IsTrue(_app.HasText("My Sitting Profile"),
                 "Choosing Sitter should open the sitter dashboard.");
+        }
+
+        /// <summary>
+        /// REQ-GR-04 through the real GUI: the booking form rejects each invalid
+        /// submission with its own message (no pet, start in the past, longer
+        /// than 14 days) and accepts a valid one at the 14-day limit. The full
+        /// boundary analysis is in BookingValidationTests; this proves the form
+        /// is wired to those rules.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("Regression")]
+        [TestCategory("EndToEnd")]
+        [TestProperty("Requirements", "REQ-GR-04, REQ-PO-04")]
+        public void BookingForm_InvalidRequests_AreRejectedWithSpecificMessages()
+        {
+            RegisterSitter();
+            FillSittingProfile();
+            LogOut();
+            RegisterOwner();
+
+            Step("Request a booking before adding any pet (REQ-GR-04: no pet selected)");
+            _app.SelectTab("Find Sitters");
+            _app.SelectFirstListItem("SittersList");
+            _app.ClickButton("Send booking request");
+            StringAssert.Contains(_app.ReadText("BookingStatus"), "Please select a pet",
+                "A request with no pet should be rejected with a specific message.");
+
+            AddPet();   // also refreshes the form's pet list
+            _app.SelectTab("Find Sitters");
+            _app.SelectComboItem("BookingPetCombo", PetName);
+
+            Step("Start date in the past is rejected");
+            _app.SetDate("StartDatePicker", DateTime.Today.AddDays(-1));
+            _app.SetDate("EndDatePicker", DateTime.Today.AddDays(2));
+            _app.ClickButton("Send booking request");
+            Assert.AreEqual("Start date cannot be in the past.", _app.ReadText("BookingStatus"));
+
+            Step("A 15-day booking is rejected");
+            _app.SetDate("StartDatePicker", DateTime.Today.AddDays(1));
+            _app.SetDate("EndDatePicker", DateTime.Today.AddDays(16));
+            _app.ClickButton("Send booking request");
+            StringAssert.Contains(_app.ReadText("BookingStatus"), "at most 14 days",
+                "A booking longer than 14 days should be rejected.");
+
+            Step("Exactly 14 days is accepted (boundary)");
+            _app.SetDate("EndDatePicker", DateTime.Today.AddDays(15));
+            _app.ClickButton("Send booking request");
+            StringAssert.Contains(_app.ReadText("BookingStatus"), "Request sent",
+                "A valid 14-day request should be accepted.");
+            StringAssert.Contains(_app.ReadText("BookingStatus"), "14 night(s)",
+                "The accepted request should be the 14-night one just entered.");
+
+            _app.SelectTab("My Bookings");
+            Assert.AreEqual(1, _app.CountListItems("BookingsList"),
+                "Only the valid request should have been saved.");
         }
 
         /// <summary>
