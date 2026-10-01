@@ -1,0 +1,74 @@
+# Continuous integration for Sitters4Us (ENSE707 Task 5).
+#
+# Every push and pull request to main goes through three quality gates, in
+# order; a failure at any gate stops the run and marks the commit/PR red:
+#   1. Build        - the WPF app compiles (Release).
+#   2. Smoke        - 8 core tests (TestCategory=Smoke) prove the build is
+#                     basically sane before spending time on the full suite.
+#   3. Full suite   - all logic + integration tests in PetSitters.Tests.
+# Results (.trx) are always uploaded as an artifact and summarised on the run page.
+#
+# The FlaUI UI suite (PetSitters.UiTests) is NOT run here: it drives a real
+# desktop session and is run locally before merging instead. See docs/CI.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:   # allows a manual run from the Actions tab
+
+jobs:
+  build-and-test:
+    # The app is .NET Framework 4.7.2 WPF, which only builds on Windows.
+    runs-on: windows-latest
+    env:
+      CONFIGURATION: Release
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The app is a classic (non-SDK) csproj: it needs Visual Studio's MSBuild,
+      # not `dotnet build`. The SDK-style test project uses the .NET SDK.
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: "Gate 1: Build"
+        # SkipTests: the csproj would otherwise run the tests inside the build;
+        # here each stage is its own step so the log shows which gate failed.
+        run: msbuild PetSitters.csproj /t:Restore,Build /p:Configuration=${{ env.CONFIGURATION }} /p:SkipTests=true /nologo /v:minimal
+
+      - name: "Gate 2: Smoke tests"
+        run: dotnet test PetSitters.Tests -c ${{ env.CONFIGURATION }} --nologo --filter TestCategory=Smoke --logger "trx;LogFileName=smoke.trx" --results-directory TestResults
+
+      - name: "Gate 3: Full logic + integration suite"
+        run: dotnet test PetSitters.Tests -c ${{ env.CONFIGURATION }} --nologo --no-build --logger "trx;LogFileName=full.trx" --results-directory TestResults
+
+      - name: Summarise test results
+        if: always()   # also report when a gate failed
+        shell: pwsh
+        run: |
+          # Turn each .trx result file into a row on the run's summary page.
+          $rows = foreach ($trx in Get-ChildItem TestResults -Filter *.trx -ErrorAction SilentlyContinue) {
+            $c = ([xml](Get-Content $trx.FullName)).TestRun.ResultSummary.Counters
+            "| $($trx.BaseName) | $($c.total) | $($c.passed) | $($c.failed) |"
+          }
+          $summary = @('### Test results', '', '| Stage | Total | Passed | Failed |', '|---|--:|--:|--:|') + $rows
+          if (-not $rows) { $summary += '| (no results; build failed before tests ran) | | | |' }
+          $summary -join "`n" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          if-no-files-found: warn

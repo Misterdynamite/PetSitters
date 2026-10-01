@@ -85,6 +85,10 @@ msbuild PetSitters.csproj /t:Build /p:Configuration=Debug
 
 The built app is `bin\Debug\PetSitters.exe`.
 
+A command-line build **also runs the automated tests** (smoke set, then the full
+suite), and fails if any test fails. Add `/p:SkipTests=true` to skip them. The
+same checks run in GitHub Actions on every push. See [docs/CI.md](docs/CI.md).
+
 ## Try it (happy path)
 
 1. **Create a sitter account** (choose *Offer sitting*). On the sitter dashboard,
@@ -97,8 +101,8 @@ The built app is `bin\Debug\PetSitters.exe`.
 
 ## Notes / possible next steps
 
-- No dedicated unit-test project is included yet. The logic layer is structured for
-  it — a good next step is an MSTest/xUnit project referencing this one, turning the
-  smoke test into formal test cases mapped to the requirements traceability matrix.
+- Tests: `PetSitters.Tests` (MSTest logic + integration, with a traceability matrix
+  in [docs/UnitTests.md](docs/UnitTests.md)) and `PetSitters.UiTests` (FlaUI
+  end-to-end regression). Build and CI gates are described in [docs/CI.md](docs/CI.md).
 - Location matching is textual (owners see all sitters). Distance-based search would
   be a sensible enhancement.

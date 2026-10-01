@@ -159,4 +159,30 @@
     <Resource Include="Assets\Images\Paw2.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!--
+    Quality gate: a command-line build also runs the automated tests, smoke
+    set first (fail fast), then the full logic + integration suite. Any failing
+    test fails the build, so "it builds" means "it builds AND the tests pass".
+
+    Skipped when:
+      - building inside Visual Studio: Test Explorer runs the tests there, and
+        every F5 would otherwise wait for the whole suite;
+      - /p:SkipTests=true: the CI workflow builds once with this, then runs each
+        test stage as its own step so the log shows which gate failed.
+    The FlaUI UI suite is deliberately NOT run here: it takes over the real
+    desktop. See docs/CI.md for why, and how it is run instead.
+    PetSitters.Tests references the built EXE (not this project), so testing it
+    here cannot recurse back into this build.
+  -->
+  <Target Name="RunTestsAfterBuild" AfterTargets="Build"
+          Condition="'$(BuildingInsideVisualStudio)' != 'true' And '$(SkipTests)' != 'true'">
+    <PropertyGroup>
+      <TestProject>$(MSBuildProjectDirectory)\PetSitters.Tests\PetSitters.Tests.csproj</TestProject>
+      <TestResultsDir>$(MSBuildProjectDirectory)\TestResults</TestResultsDir>
+    </PropertyGroup>
+    <Message Importance="high" Text="Quality gate: smoke tests (TestCategory=Smoke)" />
+    <Exec Command="dotnet test &quot;$(TestProject)&quot; -c $(Configuration) --nologo --filter TestCategory=Smoke --logger &quot;trx;LogFileName=smoke.trx&quot; --results-directory &quot;$(TestResultsDir)&quot;" />
+    <Message Importance="high" Text="Quality gate: full logic + integration suite" />
+    <Exec Command="dotnet test &quot;$(TestProject)&quot; -c $(Configuration) --nologo --no-build --logger &quot;trx;LogFileName=full.trx&quot; --results-directory &quot;$(TestResultsDir)&quot;" />
+  </Target>
 </Project>

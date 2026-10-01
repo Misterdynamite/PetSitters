@@ -30,10 +30,16 @@ projects build with `dotnet` *after* the app is built.
 MSBuild path on this machine:
 `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe`
 
-Build the app (also restores its NuGet packages):
+Build the app (also restores its NuGet packages). **A command-line build also
+runs the tests** (smoke set, then the full `PetSitters.Tests` suite, about 40 s),
+and a failing test fails the build. Add `/p:SkipTests=true` to build only.
+Builds inside Visual Studio skip this. See `docs/CI.md`.
 ```bash
 "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" PetSitters.csproj /t:Restore,Build /p:Configuration=Debug
 ```
+
+CI: `.github/workflows/ci.yml` runs build → smoke → full suite on every push or PR
+to `main` (windows-latest). The UI suite is not in CI; run it locally before pushing.
 
 Run the app: launch `bin\Debug\PetSitters.exe` (a windowed app).
 
@@ -108,6 +114,11 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 - Tests use AAA structure, `Method_Scenario_ExpectedResult` names, `[DataRow]` for
   boundary/equivalence cases, and are tagged to requirement IDs (FR-O*/FR-S*/FR-A*)
   in comments. Put DB tests in classes deriving from `DatabaseTestBase`.
+- **Every test carries `[TestCategory]` labels on two axes:** a type
+  (`Unit`/`Integration`/`System`/`Acceptance`/`Regression`/`Security`/`Performance`/`Usability`)
+  and a scenario (`Positive`/`Negative`/`Boundary`/`InvalidInput`/`ErrorHandling`).
+  Label new tests the same way. The definitions, counts and per-test list are in
+  `docs/UnitTests.md` → "Test classification". Regenerate that appendix if you add tests.
 
 ## Known state / WIP
 
