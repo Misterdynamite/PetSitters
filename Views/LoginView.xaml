@@ -57,6 +57,16 @@
                 <TextBlock x:Name="ErrorText" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
                            Margin="0,10,0,0" Visibility="Collapsed" HorizontalAlignment="Center"/>
 
+                <!-- REQ-GR-06: only shown when the email + password match both an
+                     owner and a sitter account, to pick which one to open. -->
+                <StackPanel x:Name="RoleChoicePanel" Orientation="Horizontal" HorizontalAlignment="Center"
+                            Margin="0,10,0,0" Visibility="Collapsed">
+                    <RadioButton x:Name="LoginOwnerRadio" Content="Owner" GroupName="LoginRole"
+                                 Foreground="White" Margin="0,0,16,0"/>
+                    <RadioButton x:Name="LoginSitterRadio" Content="Sitter" GroupName="LoginRole"
+                                 Foreground="White"/>
+                </StackPanel>
+
                 <Button Content="Log in" Margin="0,20,0,0" Click="Login_Click" IsDefault="True" Width="180" Height="36"
                         HorizontalAlignment="Center" Background="{StaticResource LoginPaletteDark}" Foreground="{StaticResource LoginPalettePale}" BorderThickness="0">
                     <Button.Template>

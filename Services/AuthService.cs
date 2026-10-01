@@ -6,7 +6,7 @@ namespace PetSitters.Services
 {
     /// <summary>
     /// Account creation (FR-1) and login (FR-2). Validates input, enforces
-    /// unique emails, and hashes passwords. Returns an <see cref="AuthResult"/>
+    /// one account per email per role (REQ-GR-06), and hashes passwords. Returns an <see cref="AuthResult"/>
     /// rather than throwing, so the UI can show friendly messages and tests can
     /// assert on the outcome.
     /// </summary>
@@ -43,8 +43,13 @@ namespace PetSitters.Services
             if (!ValidationHelper.IsNonEmpty(location))
                 return AuthResult.Fail("Please enter your location (suburb / city).");
 
-            if (_users.EmailExists(email))
-                return AuthResult.Fail("An account with that email already exists.");
+            // REQ-GR-06: one account per email PER ROLE. An owner may also
+            // register as a sitter with the same email (and vice versa), but not
+            // twice as the same role. Case-insensitive, matching the DB index.
+            if (_users.EmailExists(email, role))
+                return AuthResult.Fail(
+                    $"{(role == UserRole.Owner ? "An owner" : "A sitter")} account with that email already exists. " +
+                    "Log in instead, or use a different email.");
 
             PasswordHasher.CreateHash(password, out string hash, out string salt);
 
@@ -64,21 +69,42 @@ namespace PetSitters.Services
             return AuthResult.Ok(user);
         }
 
-        public AuthResult Login(string email, string password)
+        /// <summary>
+        /// Logs in by email and password. Since REQ-GR-06 an email can have an
+        /// Owner and a Sitter account: only accounts whose password matches are
+        /// considered, so differing passwords pick the account by themselves. If
+        /// both match, the result asks for a role (<see cref="AuthResult.RequiresRoleChoice"/>)
+        /// and the caller retries with <paramref name="role"/> set.
+        /// </summary>
+        public AuthResult Login(string email, string password, UserRole? role = null)
         {
             email = (email ?? string.Empty).Trim();
 
             if (!ValidationHelper.IsNonEmpty(email) || string.IsNullOrEmpty(password))
                 return AuthResult.Fail("Please enter your email and password.");
 
-            User user = _users.FindByEmail(email);
+            var matches = new System.Collections.Generic.List<User>();
+            foreach (User candidate in _users.FindAllByEmail(email))
+            {
+                if (role.HasValue && candidate.Role != role.Value)
+                    continue;
+                if (PasswordHasher.Verify(password, candidate.PasswordHash, candidate.PasswordSalt))
+                    matches.Add(candidate);
+            }
 
-            // Same message whether the email is unknown or the password is wrong,
-            // so we don't reveal which emails are registered.
-            if (user == null || !PasswordHasher.Verify(password, user.PasswordHash, user.PasswordSalt))
+            // Same message whether the email is unknown, the password is wrong or
+            // there is no account of the chosen role, so we don't reveal which
+            // emails (or email + role pairs) are registered.
+            if (matches.Count == 0)
                 return AuthResult.Fail("Incorrect email or password.");
 
-            return AuthResult.Ok(user);
+            // Only reachable with the correct password, so this reveals nothing
+            // to someone who doesn't already own both accounts.
+            if (matches.Count > 1)
+                return AuthResult.ChooseRole(
+                    "This email has both an owner and a sitter account. Choose which one to log in to.");
+
+            return AuthResult.Ok(matches[0]);
         }
     }
 }

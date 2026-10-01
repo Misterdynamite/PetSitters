@@ -18,7 +18,7 @@ QA artefacts and tests matter as much as features.
 | Project | Kind | Framework | Purpose |
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
-| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (153 cases) |
+| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (167 cases) |
 | `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation |
 
 ## Build, test, run — IMPORTANT tooling notes
@@ -91,6 +91,11 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   isolated temp file (see `DatabaseTestBase`). **To reset app data, delete the
   `.db` file.**
 - Dates are stored as ISO-8601 round-trip strings.
+- **Accounts are unique per (Email, Role)** (REQ-GR-06): one email may have an
+  Owner and a Sitter account, never two of one role. `Users` used to be
+  `UNIQUE(Email)`; `ApplyMigrations` rebuilds old databases with foreign keys
+  OFF (with them on, dropping `Users` cascade-deletes everything). Never rebuild a
+  table here with FKs on.
 - **Security:** passwords are salted PBKDF2 (`PasswordHasher`) — never plaintext.
   Login uses one message for "unknown email" and "wrong password" (no user
   enumeration). Chat rows are scoped per booking.
@@ -108,8 +113,8 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 
 - **UI regression suite fails at the default window size (since the login/register
   redesign, 503e9af/6f33d67).** The 920×640 window clips the password box off
-  screen, so FlaUI throws `NoClickablePointException`. All 4 UI tests pass with the
-  window maximised (checked 2026-09-28). Fix the layout (or add a ScrollViewer)
+  screen, so FlaUI throws `NoClickablePointException`. All 5 UI tests pass with the
+  window maximised (checked 2026-10-01). Fix the layout (or add a ScrollViewer)
   rather than maximising in the driver, because real users hit the same clipping.
 
 - **Owner-side chat (FR-O5) is not implemented.** Chat works only from the sitter

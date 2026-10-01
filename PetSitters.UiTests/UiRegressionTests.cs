@@ -23,6 +23,7 @@ namespace PetSitters.UiTests
     ///   REQ-GR-08 overlapping accept refused (OverlappingRequests_* test)
     ///   REQ-PO-08 same-pet double booking refused, REQ-PO-07 owner cancels
     ///     (SamePetDoubleBooking_* test; the journey also cancels an accepted booking)
+    ///   REQ-GR-06 one account per email per role; login asks which (SharedEmail_* test)
     ///
     /// Not covered: FR-O5 (owner-side chat) is not implemented in the app yet, so
     /// the journey only exercises chat from the sitter side.
@@ -247,6 +248,47 @@ namespace PetSitters.UiTests
         }
 
         /// <summary>
+        /// REQ-GR-06 through the real GUI: an owner can sign up again as a sitter
+        /// with the same email, but a second sitter sign-up with that email is
+        /// refused with a warning. Logging in with the shared email and password
+        /// then asks which account to open, and choosing Sitter opens the sitter
+        /// dashboard.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("Regression")]
+        [TestCategory("EndToEnd")]
+        [TestProperty("Requirements", "REQ-GR-06, FR-A1, FR-A2")]
+        public void SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole()
+        {
+            RegisterOwner();
+            LogOut();
+
+            // Same email AND password as the owner, so login cannot tell them apart.
+            RegisterSitter(OwnerEmail, OwnerPassword);
+            LogOut();
+
+            Step("A second sitter account with the same email is refused (REQ-GR-06)");
+            FillSitterRegistration(OwnerEmail, OwnerPassword);
+            StringAssert.Contains(_app.ReadText("ErrorText"), "A sitter account with that email already exists",
+                "A duplicate same-role registration should be refused with a warning.");
+            Assert.IsTrue(_app.Exists("NameBox"), "A refused registration should stay on the register form.");
+            _app.ClickButton("Log in");   // the register form's "back to login" link
+
+            Step("Log in with the shared email; the app asks which account");
+            _app.EnterText("EmailBox", OwnerEmail);
+            _app.EnterPassword("PasswordBox", OwnerPassword);
+            _app.ClickButton("Log in");
+            StringAssert.Contains(_app.ReadText("ErrorText"), "both an owner and a sitter account",
+                "Login should ask which account to open rather than guess.");
+
+            Step("Choose Sitter and log in");
+            _app.SelectRadio("LoginSitterRadio");
+            _app.ClickButton("Log in");
+            Assert.IsTrue(_app.HasText("My Sitting Profile"),
+                "Choosing Sitter should open the sitter dashboard.");
+        }
+
+        /// <summary>
         /// Guards the login failure path and the "no user enumeration" quality
         /// attribute: a bad sign-in must show the generic message and leave the
         /// user on the login screen rather than routing into a dashboard.
@@ -270,24 +312,31 @@ namespace PetSitters.UiTests
 
         // ---- journey steps ---------------------------------------------------
 
-        private void RegisterSitter()
+        /// <param name="email">Defaults to the sitter's own; REQ-GR-06 reuses the owner's.</param>
+        private void RegisterSitter(string email = SitterEmail, string password = SitterPassword)
         {
-            Step("Register a new Sitter account (FR-A1)");
+            Step("Register a new Sitter account as " + email + " (FR-A1)");
 
-            _app.ClickButton("Create an account");   // from the login screen
-            _app.SelectRadio("SitterRadio");
-            _app.EnterText("NameBox", SitterName);
-            _app.EnterText("EmailBox", SitterEmail);
-            _app.EnterPassword("PasswordBox", SitterPassword);
-            _app.EnterText("PhoneBox", SitterPhone);
-            _app.EnterText("LocationBox", SitterLocation);
-            _app.ClickButton("Create account");
+            FillSitterRegistration(email, password);
 
             // Registration signs the user straight in and lands on the sitter
             // dashboard, which has a "My Sitting Profile" tab that owners never see.
             Assert.IsTrue(_app.HasText("My Sitting Profile"),
                 "Expected to land on the sitter dashboard after registering as a sitter. " +
                 "Validation error on the register form: " + (_app.TryReadText("ErrorText") ?? "(none)"));
+        }
+
+        /// <summary>Opens the register form from the login screen and submits a sitter sign-up.</summary>
+        private void FillSitterRegistration(string email, string password)
+        {
+            _app.ClickButton("Create an account");   // from the login screen
+            _app.SelectRadio("SitterRadio");
+            _app.EnterText("NameBox", SitterName);
+            _app.EnterText("EmailBox", email);
+            _app.EnterPassword("PasswordBox", password);
+            _app.EnterText("PhoneBox", SitterPhone);
+            _app.EnterText("LocationBox", SitterLocation);
+            _app.ClickButton("Create account");
         }
 
         private void SaveSitterDetails()

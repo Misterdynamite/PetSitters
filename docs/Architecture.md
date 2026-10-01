@@ -102,7 +102,7 @@ flowchart TD
 
 | View | Role | Tabs / purpose |
 |------|------|----------------|
-| `LoginView` | anyone | Email + password login |
+| `LoginView` | anyone | Email + password login (asks Owner/Sitter if both accounts match) |
 | `RegisterView` | anyone | Create an Owner or Sitter account (personal details incl. location) |
 | `OwnerDashboardView` | Owner | **My Details** · **My Pets** · **Find Sitters** (browse + request booking) · **My Bookings** (status + cancel) |
 | `SitterDashboardView` | Sitter | **My Details** · **My Sitting Profile** (availability, experience, rate…) · **Booking Requests** (accept/decline) · **My Chats** · hidden **Chat** panel |
@@ -127,7 +127,7 @@ erDiagram
 
     Users {
         int Id PK
-        string Email "UNIQUE, case-insensitive"
+        string Email "UNIQUE per Role (Email, Role), case-insensitive"
         string PasswordHash
         string PasswordSalt
         int Role "0=Owner, 1=Sitter"
@@ -205,7 +205,7 @@ One repository per aggregate, each taking the `Database`:
 
 | Repository | Key methods |
 |------------|-------------|
-| `UserRepository` | `EmailExists`, `Insert`, `UpdateDetails`, `FindByEmail`, `FindById`, `GetByRole` |
+| `UserRepository` | `EmailExists` (any role / per role), `Insert`, `UpdateDetails`, `FindByEmail`, `FindAllByEmail`, `FindById`, `GetByRole` |
 | `PetRepository` | `Insert`, `Delete`, `GetByOwner` |
 | `SitterProfileRepository` | `GetByUserId`, `Upsert` (insert-or-update, 1:1) |
 | `BookingRepository` | `Insert`, `UpdateStatus`, `GetForOwner`, `GetForSitter`, `GetById` |
@@ -219,10 +219,30 @@ One repository per aggregate, each taking the `Database`:
 
 `AuthService.Register` validates input — **all registration fields are required**:
 a valid email, a password of at least 6 characters, full name, phone, and
-location. It then rejects duplicate emails (case-insensitive), hashes the
-password, and inserts the user. `AuthService.Login` verifies the password hash and returns the
-same error for "unknown email" and "wrong password" (no user enumeration). Both
-return an `AuthResult` (`Success` / `ErrorMessage` / `User`).
+location. It then rejects a duplicate email **for the same role**
+(case-insensitive), hashes the password, and inserts the user. `AuthService.Login`
+verifies the password hash and returns the same error for "unknown email" and
+"wrong password" (no user enumeration). Both return an `AuthResult`
+(`Success` / `ErrorMessage` / `User` / `RequiresRoleChoice`).
+
+**REQ-GR-06, one account per email per role.** The same email can hold one Owner
+*and* one Sitter account (separate users, ids, pets and bookings), but never two
+of the same role. The rule is enforced twice: by `AuthService.Register` (a
+friendly "An owner/A sitter account with that email already exists" warning) and
+by the database's `UNIQUE (Email, Role)` constraint. At login, only accounts
+whose password matches are considered, so different passwords select the account
+by themselves. If the password matches both, the result has
+`RequiresRoleChoice` set, and `LoginView` reveals an Owner/Sitter choice and
+retries with that role. The "which role?" prompt only appears after a correct
+password, so it reveals nothing about which emails are registered.
+
+**Migration.** Databases created before REQ-GR-06 had `UNIQUE` on `Email`
+alone. `Database.ApplyMigrations` detects that index and rebuilds `Users`
+using SQLite's documented table-rebuild procedure, keeping every row and id.
+Foreign keys are switched **off** for the rebuild; otherwise `DROP TABLE Users`
+would fire the `ON DELETE CASCADE` rules and wipe every pet, booking, profile and
+chat message. `DatabaseMigrationTests` guards this, and it was confirmed to fail
+when that safeguard is removed.
 
 ### Owner requests a booking (FR-O4)
 

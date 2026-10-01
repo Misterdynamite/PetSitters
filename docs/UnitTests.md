@@ -8,8 +8,8 @@ requirements traceability matrix, and how to run everything.
 - **What it tests:** the UI-independent logic layer — `Services` (`AuthService`,
   `BookingService`, `ValidationHelper`, `PasswordHasher`), the domain `Models`,
   and the SQLite `Data` repositories.
-- **Result:** **75 test methods → 153 executed cases** (the difference is
-  `[DataRow]` data-driven expansion). All passing (last run 2026-09-28).
+- **Result:** **86 test methods → 167 executed cases** (the difference is
+  `[DataRow]` data-driven expansion). All passing (last run 2026-10-01).
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
   `PetSitters.UiTests` (FlaUI) project.
 
@@ -100,6 +100,25 @@ app, so they can run in any order (or in parallel) safely.
 
 ### Component / integration tests (real isolated SQLite)
 
+#### `SharedEmailTests` — 9 methods / 12 cases · REQ-GR-06, FR-A1, FR-A2
+| Test | What it verifies |
+|------|------------------|
+| `Register_SameEmailForTheOtherRole_Succeeds` `[DataRow ×2]` | Owner→sitter and sitter→owner with one email both succeed (two accounts). |
+| `Register_SameEmailSameRole_IsRejectedWithRoleSpecificWarning` `[DataRow ×2]` | Same email + same role (any casing) is refused with "An owner/A sitter account … already exists"; no second account. |
+| `Register_WhenBothRolesExist_RejectsEitherRole` | With both roles taken, neither can be registered again. |
+| `Insert_DuplicateEmailAndRole_IsRejectedByTheDatabase` | The `UNIQUE (Email, Role)` constraint holds even if `AuthService` is bypassed. |
+| `Login_SharedEmailSamePassword_AsksWhichRole` | Login doesn't guess; it returns `RequiresRoleChoice`. |
+| `Login_SharedEmailWithChosenRole_OpensThatAccount` `[DataRow ×2]` | Supplying the role opens that account. |
+| `Login_SharedEmailDifferentPasswords_OpensTheMatchingAccount` | Different passwords pick the account without a prompt. |
+| `Login_SharedEmailFailures_UseTheGenericMessage` | Wrong password / role with no account give the same message as an unknown email (no enumeration). |
+| `SharedEmail_AccountsAreSeparate` | The two accounts have separate ids and data. |
+
+#### `DatabaseMigrationTests` — 2 methods · REQ-GR-06 (data-loss guard)
+| Test | What it verifies |
+|------|------------------|
+| `Initialize_OnPreGr06Database_KeepsAllDataAndAllowsSecondRole` | An old `UNIQUE(Email)` database is rebuilt to `UNIQUE (Email, Role)` keeping users, ids, pets, bookings and links, and then accepts a second role. Mutation-checked: it fails if the rebuild leaves foreign keys on. |
+| `Initialize_RunTwice_IsIdempotent` | Startup migration is a no-op the second time. |
+
 #### `BookingServiceTests` — 18 methods / 25 cases · REQ-GR-08, REQ-PS-03, REQ-PO-08, REQ-PO-07
 | Test | What it verifies |
 |------|------------------|
@@ -132,7 +151,7 @@ app, so they can run in any order (or in parallel) safely.
 | `Register_WithEmptyPhone_Fails` `[DataRow ×2]` | Phone is a **required** field. |
 | `Register_WithEmptyLocation_Fails` `[DataRow ×2]` | Location is a **required** field. |
 | `Register_WithAllFieldsSupplied_PersistsPhoneAndLocation` | All supplied details are stored. |
-| `Register_DuplicateEmail_Fails_CaseInsensitive` | A duplicate email (different casing) is rejected. |
+| `Register_DuplicateEmail_Fails_CaseInsensitive` | A duplicate email for the **same role** (different casing) is rejected. |
 | `Register_StoresHashedPassword_NotPlainText` | The persisted row stores a hash + salt, not the password. |
 | `Login_WithCorrectCredentials_Succeeds` | Correct credentials log in. |
 | `Login_WithWrongPassword_Fails` | Wrong password is rejected. |
@@ -198,6 +217,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
 | FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
 | REQ-GR-08 | Sitter cannot accept overlapping bookings (FR-07) | `BookingOverlapTests`; `AcceptRequest_Overlap*`, `AcceptRequest_BackToBack*` (BookingServiceTests); UI: `OverlappingRequests_*` | ✅ Passing |
+| REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |

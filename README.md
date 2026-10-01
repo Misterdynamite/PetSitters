@@ -70,6 +70,10 @@ login uses a length-constant comparison. Login failures return the same message
 whether the email is unknown or the password is wrong, so the app does not reveal
 which emails are registered.
 
+One email can have both an **owner and a sitter account** (REQ-GR-06), but not
+two of the same role. If the same password opens both, the login screen asks
+which one to use.
+
 ## Building & running
 
 Open `PetSitters.sln` in Visual Studio 2022 and press **F5**, or from a command line:

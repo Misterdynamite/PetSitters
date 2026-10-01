@@ -21,6 +21,7 @@ full job details before deciding) is UI-only presentation, so this project is it
 | `BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen` | The full two-role workflow (below) |
 | `OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending` | REQ-GR-08: after accepting one of two same-date requests, accepting the other is refused with a "stay pending" message and it remains in the list |
 | `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | REQ-PO-08 + REQ-PO-07: booking the same pet twice is refused; cancelling the pending booking (with confirmation) frees the pet to rebook, and the cancelled one leaves the sitter's queue |
+| `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | REQ-GR-06: an owner re-registers as a sitter with the same email; a second sitter sign-up is refused with a warning; login with the shared password asks Owner/Sitter and opens the chosen dashboard |
 | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | Failed login shows the generic, non-enumerating message and stays put |
 
 The journey covers: register **Sitter** → personal details → sitting profile →

@@ -16,7 +16,7 @@ namespace PetSitters.Data
             _db = db ?? throw new ArgumentNullException(nameof(db));
         }
 
-        /// <summary>True if an account already uses this email (case-insensitive).</summary>
+        /// <summary>True if an account of any role already uses this email (case-insensitive).</summary>
         public bool EmailExists(string email)
         {
             using (var connection = _db.OpenConnection())
@@ -27,6 +27,44 @@ namespace PetSitters.Data
                 long count = Convert.ToInt64(command.ExecuteScalar());
                 return count > 0;
             }
+        }
+
+        /// <summary>
+        /// True if an account of this specific role already uses this email
+        /// (case-insensitive). REQ-GR-06: an email may hold one account per role.
+        /// </summary>
+        public bool EmailExists(string email, UserRole role)
+        {
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT COUNT(1) FROM Users WHERE Email = @email AND Role = @role;";
+                command.Parameters.AddWithValue("@email", email);
+                command.Parameters.AddWithValue("@role", (int)role);
+                long count = Convert.ToInt64(command.ExecuteScalar());
+                return count > 0;
+            }
+        }
+
+        /// <summary>
+        /// Every account using this email, ordered by Id: at most one Owner and
+        /// one Sitter (REQ-GR-06). Login uses this to decide which account is meant.
+        /// </summary>
+        public List<User> FindAllByEmail(string email)
+        {
+            var users = new List<User>();
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT * FROM Users WHERE Email = @email ORDER BY Id;";
+                command.Parameters.AddWithValue("@email", email);
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                        users.Add(Map(reader));
+                }
+            }
+            return users;
         }
 
         /// <summary>Inserts a new user and returns it with its generated Id.</summary>
@@ -72,12 +110,17 @@ WHERE Id = @id;";
             }
         }
 
+        /// <summary>
+        /// The first (lowest Id) account using this email, or null. Since
+        /// REQ-GR-06 an email can have two accounts, so anything that must pick
+        /// the right one (e.g. login) uses <see cref="FindAllByEmail"/> instead.
+        /// </summary>
         public User FindByEmail(string email)
         {
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM Users WHERE Email = @email LIMIT 1;";
+                command.CommandText = "SELECT * FROM Users WHERE Email = @email ORDER BY Id LIMIT 1;";
                 command.Parameters.AddWithValue("@email", email);
                 using (var reader = command.ExecuteReader())
                 {
