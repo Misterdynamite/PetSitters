@@ -213,6 +213,7 @@ namespace PetSitters.Views
             RequestsList.ItemsSource = rows;
             RequestMessage.Text = "Select a request to view its message.";
             RequestStatus.Text = string.Empty;
+            try { var img = FindName("SelectedPetImage") as Image; if (img != null) img.Source = null; } catch { }
             // Also refresh active chats view
             LoadChats();
         }
@@ -291,7 +292,31 @@ namespace PetSitters.Views
         private void RequestsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (RequestsList.SelectedItem is SitterRequestRow row)
+            {
                 RequestMessage.Text = string.IsNullOrWhiteSpace(row.Message) ? "(no message)" : row.Message;
+
+                // Show pet image if available
+                try
+                {
+                    var img = FindName("SelectedPetImage") as Image;
+                    if (img != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(row.PetImagePath) && File.Exists(row.PetImagePath))
+                        {
+                            img.Visibility = Visibility.Visible;
+                            img.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(row.PetImagePath));
+                        }
+                        else
+                        {
+                            img.Source = null;
+                        }
+                    }
+                }
+                catch
+                {
+                    try { var img2 = FindName("SelectedPetImage") as Image; if (img2 != null) img2.Source = null; } catch { }
+                }
+            }
         }
 
         private void ViewDetails_Click(object sender, RoutedEventArgs e)
@@ -445,6 +470,7 @@ namespace PetSitters.Views
         public string PetBreed { get; }
         public string PetAge { get; }
         public string PetNotes { get; }
+        public string PetImagePath { get; }
 
         public SitterRequestRow(Booking b, User owner, Pet pet)
         {
@@ -462,6 +488,7 @@ namespace PetSitters.Views
             {
                 HasSpecificPet = true;
                 PetSummary = pet.Name;
+                PetImagePath = pet.ImagePath;
                 PetSpecies = Or(pet.Species, "Not specified");
                 PetBreed = Or(pet.Breed, "Not specified");
                 PetAge = pet.AgeDisplay;

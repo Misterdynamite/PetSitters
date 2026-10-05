@@ -108,6 +108,17 @@ namespace PetSitters.Views
         private void LoadPets()
         {
             PetsList.ItemsSource = _services.Pets.GetByOwner(Me.Id);
+            try { var btn = FindName("DeletePetButton") as Button; if (btn != null) btn.IsEnabled = false; } catch { }
+        }
+
+        private void PetsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                var btn = FindName("DeletePetButton") as Button;
+                if (btn != null) btn.IsEnabled = PetsList.SelectedItem is Pet;
+            }
+            catch { }
         }
 
         private void AddPet_Click(object sender, RoutedEventArgs e)
@@ -205,12 +216,29 @@ namespace PetSitters.Views
         {
             if (PetsList.SelectedItem is Pet pet)
             {
+                var confirm = MessageBox.Show($"Are you sure you want to delete '{pet.Name}'? This cannot be undone.",
+                    "Delete pet", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (confirm != MessageBoxResult.Yes) return;
+
+                // Attempt to remove the pet image file from disk if present
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(pet.ImagePath) && File.Exists(pet.ImagePath))
+                    {
+                        try { File.Delete(pet.ImagePath); } catch { /* ignore failures */ }
+                    }
+                }
+                catch { }
+
                 _services.Pets.Delete(pet.Id);
                 LoadPets();
                 RefreshBookingPetCombo();
+                PetStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
+                PetStatus.Text = "Pet deleted.";
             }
             else
             {
+                PetStatus.Foreground = (System.Windows.Media.Brush)FindResource("Danger");
                 PetStatus.Text = "Select a pet in the list to delete it.";
             }
         }

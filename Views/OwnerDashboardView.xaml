@@ -7,43 +7,43 @@
     <TabControl x:Name="RootTabs" Margin="16" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource TopTabItem}">
 
 
-		<!-- FR-7: personal details incl. location -->
-		<TabItem Header="My Details">
+        <!-- FR-7: personal details incl. location -->
+        <TabItem Header="My Details">
             <Grid Margin="0,24">
                 <Border Background="{StaticResource LoginPaletteMid}" CornerRadius="12" Padding="24"
                         BorderBrush="#E5E7EB" BorderThickness="1" HorizontalAlignment="Center" Width="460"
                         VerticalAlignment="Center" MinHeight="420">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel HorizontalAlignment="Center" Margin="0,4">
-						<Grid HorizontalAlignment="Center" Margin="0,0,0,8">
-                            <Ellipse Width="140" Height="140" Cursor="Hand" MouseLeftButtonUp="ImportProfileImage_Click">
-                                <Ellipse.Fill>
-                                    <ImageBrush x:Name="ProfileImageBrush" ImageSource="/Assets/Images/Paw2.png" Stretch="UniformToFill"/>
-                                </Ellipse.Fill>
-                            </Ellipse>
-						</Grid>
-                        <TextBlock x:Name="RoleText" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
+                            <Grid HorizontalAlignment="Center" Margin="0,0,0,8">
+                                <Ellipse Width="140" Height="140" Cursor="Hand" MouseLeftButtonUp="ImportProfileImage_Click">
+                                    <Ellipse.Fill>
+                                        <ImageBrush x:Name="ProfileImageBrush" ImageSource="/Assets/Images/Paw2.png" Stretch="UniformToFill"/>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                            </Grid>
+                            <TextBlock x:Name="RoleText" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,4"/>
 
-						<Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
-							<TextBlock x:Name="EmailText" TextAlignment="Center" FontSize="14" Foreground="{StaticResource Muted}"/>
-						</Border>
-						<Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
-							<TextBox x:Name="NameBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
-						</Border>
-						<Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
-							<TextBox x:Name="PhoneBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
-						</Border>
-						<Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
-							<TextBox x:Name="LocationBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
-						</Border>
-                    <Button Content="Save details" Style="{StaticResource CardSaveButton}"
+                            <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                                <TextBlock x:Name="EmailText" TextAlignment="Center" FontSize="14" Foreground="{StaticResource Muted}"/>
+                            </Border>
+                            <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                                <TextBox x:Name="NameBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
+                            </Border>
+                            <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                                <TextBox x:Name="PhoneBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
+                            </Border>
+                            <Border Background="White" CornerRadius="18" Padding="6" Margin="0,8" Width="340">
+                                <TextBox x:Name="LocationBox" BorderThickness="0" Background="Transparent" TextAlignment="Center" FontSize="14"/>
+                            </Border>
+                            <Button Content="Save details" Style="{StaticResource CardSaveButton}"
                         Click="SaveDetails_Click" Width="220"/>
-                    <TextBlock x:Name="DetailsStatus" Foreground="{StaticResource Brand}" Margin="0,8,0,0"/>
-                </StackPanel>
-                </ScrollViewer>
-            </Border>
-			</Grid>
-		</TabItem>
+                            <TextBlock x:Name="DetailsStatus" Foreground="{StaticResource Brand}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </TabItem>
 
         <!-- FR-4: register pet details -->
         <TabItem Header="My Pets">
@@ -57,7 +57,7 @@
                         BorderBrush="#E5E7EB" BorderThickness="1" Margin="0,0,12,0">
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="My pets" Style="{StaticResource H1}"/>
-                        <ListView x:Name="PetsList" BorderThickness="0">
+                        <ListView x:Name="PetsList" BorderThickness="0" SelectionChanged="PetsList_SelectionChanged">
                             <ListView.View>
                                 <GridView>
                                     <GridViewColumn Header="Name" DisplayMemberBinding="{Binding Name}" Width="110"/>
@@ -72,46 +72,49 @@
                 </Border>
 
                 <Border Grid.Column="1" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
-                        BorderBrush="#E5E7EB" BorderThickness="1" VerticalAlignment="Top">
-                    <StackPanel>
-                        <TextBlock Text="Add a pet" Style="{StaticResource H2}"/>
-                        <TextBlock Text="Name" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="PetNameBox"/>
-                        <TextBlock Text="Species (Dog, Cat...)" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="PetSpeciesBox"/>
-                        <TextBlock Text="Breed" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="PetBreedBox"/>
-                        <TextBlock Text="Age" Style="{StaticResource FieldLabel}"/>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="10"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBox x:Name="PetAgeBox" Text="0"/>
-                                <TextBlock Text="Years" FontSize="11" Foreground="{StaticResource Muted}"
+                        BorderBrush="#E5E7EB" BorderThickness="1" VerticalAlignment="Center" Height="470">
+                    <!-- ScrollViewer fills the right column; scrolls when content exceeds the Border height -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0">
+                        <StackPanel Width="259">
+                            <TextBlock Text="Add a pet" Style="{StaticResource H2}"/>
+                            <TextBlock Text="Name" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="PetNameBox"/>
+                            <TextBlock Text="Species (Dog, Cat...)" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="PetSpeciesBox"/>
+                            <TextBlock Text="Breed" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="PetBreedBox"/>
+                            <TextBlock Text="Age" Style="{StaticResource FieldLabel}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBox x:Name="PetAgeBox" Text="0"/>
+                                    <TextBlock Text="Years" FontSize="11" Foreground="{StaticResource Muted}"
                                            Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBox x:Name="PetAgeMonthsBox"/>
-                                <TextBlock Text="Months (optional, 0-11)" FontSize="11"
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBox x:Name="PetAgeMonthsBox"/>
+                                    <TextBlock Text="Months (optional, 0-11)" FontSize="11"
                                            Foreground="{StaticResource Muted}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="Care notes" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="PetNotesBox" AcceptsReturn="True" TextWrapping="Wrap" Height="48"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Image x:Name="PetPreview" Width="64" Height="64" Margin="0,0,8,0" Source="/Assets/Images/Paw2.png"/>
+                                <Button Content="Import photo" Click="ImportPetImage_Click" Width="113"/>
+                                <Button Content="Save pet" Style="{StaticResource CardSaveButton}" Click="AddPet_Click" Margin="8,0,0,0" Width="71"/>
                             </StackPanel>
-                        </Grid>
-                        <TextBlock Text="Care notes" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="PetNotesBox" AcceptsReturn="True" TextWrapping="Wrap" Height="48"/>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,8,0,0">
-                            <Image x:Name="PetPreview" Width="64" Height="64" Margin="0,0,8,0" Source="/Assets/Images/Paw2.png"/>
-                            <Button Content="Import photo" Click="ImportPetImage_Click"/>
-                            <Button Content="Save pet" Style="{StaticResource CardSaveButton}" Click="AddPet_Click" Margin="8,0,0,0"/>
-                        </StackPanel>
-                        <Button Content="Add pet" Margin="0,12,0,0" Click="AddPet_Click"/>
-                        <Button Content="Delete selected pet" Style="{StaticResource DangerButton}"
-                                Margin="0,8,0,0" Click="DeletePet_Click"/>
-                        <TextBlock x:Name="PetStatus" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
+                            <Button Content="Add pet" Margin="0,12,0,0" Click="AddPet_Click" Height="32"/>
+                            <Button x:Name="DeletePetButton" Content="Delete selected pet" Style="{StaticResource DangerButton}"
+                                Margin="0,8,0,0" Click="DeletePet_Click" IsEnabled="False" Height="31" RenderTransformOrigin="0.507,0.237"/>
+                            <TextBlock x:Name="PetStatus" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
                                    Margin="0,8,0,0"/>
-                    </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </Grid>
         </TabItem>
@@ -208,11 +211,15 @@
 
                 <Border Grid.Column="1" Background="{StaticResource CardBg}" CornerRadius="8" Padding="16"
                         BorderBrush="#E5E7EB" BorderThickness="1" VerticalAlignment="Top">
-                    <StackPanel>
+                    <!-- Make the add-pet area scrollable so buttons and fields don't overflow on smaller windows -->
+                    <!-- Constrain height so the vertical scrollbar appears when content is too tall -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="420">
+                        <StackPanel>
                         <TextBlock Text="Selected chat" Style="{StaticResource H2}"/>
                         <TextBlock x:Name="ChatSelectedDetails" TextWrapping="Wrap" Text="Select a chat to open."/>
                         <Button Content="Open chat" Margin="0,12,0,0" Click="OpenChat_Click"/>
-                    </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
             </Grid>
         </TabItem>
