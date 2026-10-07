@@ -399,3 +399,9 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Local runtime secrets (database URL etc.). NEVER commit these; .env.example
+# documents the keys with placeholder values and IS committed.
+.env
+.env.*
+!.env.example
