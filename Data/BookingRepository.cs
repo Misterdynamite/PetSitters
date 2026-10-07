@@ -67,6 +67,58 @@ VALUES (@owner, @sitter, @pet, @start, @end, @message, @status, @rate, @created)
             return Query("SitterUserId", sitterUserId);
         }
 
+        /// <summary>
+        /// The owner's bookings, newest first, each with its sitter and pet, in
+        /// ONE query. Feeds both the owner's My Bookings and Chats tabs (chats
+        /// are the Accepted ones), replacing the old 1 + 2-per-booking lookups.
+        /// </summary>
+        public List<BookingDetails> GetDetailsForOwner(int ownerUserId)
+        {
+            return QueryDetails("OwnerUserId", ownerUserId);
+        }
+
+        /// <summary>The sitter's bookings with owner and pet, in ONE query (Booking Requests + My Chats).</summary>
+        public List<BookingDetails> GetDetailsForSitter(int sitterUserId)
+        {
+            return QueryDetails("SitterUserId", sitterUserId);
+        }
+
+        private List<BookingDetails> QueryDetails(string column, int userId)
+        {
+            var details = new List<BookingDetails>();
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                // Column name is a hard-coded literal (never user input), so this is safe.
+                // The booking's own columns come through b.* unprefixed (read by Map);
+                // the joined owner, sitter and pet are prefixed o_, s_ and p_.
+                command.CommandText =
+                    "SELECT b.*, " +
+                    DbCommandExtensions.AliasedColumns("o", "o_", UserRepository.PublicColumns) + ", " +
+                    DbCommandExtensions.AliasedColumns("s", "s_", UserRepository.PublicColumns) + ", " +
+                    DbCommandExtensions.AliasedColumns("p", "p_", PetRepository.Columns) +
+                    " FROM Bookings b" +
+                    " LEFT JOIN Users o ON o.Id = b.OwnerUserId" +
+                    " LEFT JOIN Users s ON s.Id = b.SitterUserId" +
+                    " LEFT JOIN Pets p ON p.Id = b.PetId" +
+                    " WHERE b." + column + " = @userId" +
+                    " ORDER BY b.CreatedUtc DESC, b.Id DESC;";
+                command.AddParameter("@userId", userId);
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                        details.Add(new BookingDetails
+                        {
+                            Booking = Map(reader),
+                            Owner = UserRepository.MapJoined(reader, "o_"),
+                            Sitter = UserRepository.MapJoined(reader, "s_"),
+                            Pet = PetRepository.MapJoined(reader, "p_"),
+                        });
+                }
+            }
+            return details;
+        }
+
         private List<Booking> Query(string column, int userId)
         {
             var bookings = new List<Booking>();

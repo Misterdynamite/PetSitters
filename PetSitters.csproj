@@ -93,6 +93,7 @@
     <Compile Include="Models\SitterProfile.cs" />
     <Compile Include="Models\Pet.cs" />
     <Compile Include="Models\Booking.cs" />
+    <Compile Include="Models\BookingDetails.cs" />
     <Compile Include="Data\Database.cs" />
     <Compile Include="Data\DbCommandExtensions.cs" />
     <Compile Include="Data\MySqlUrl.cs" />

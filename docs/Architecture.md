@@ -265,11 +265,11 @@ engine-specific fragments come from `Database.Dialect` (§5.3).
 
 | Repository | Key methods |
 |------------|-------------|
-| `UserRepository` | `EmailExists` (any role / per role), `Insert`, `UpdateDetails`, `FindByEmail`, `FindAllByEmail`, `FindById`, `GetByRole` |
+| `UserRepository` | `EmailExists` (any role / per role), `Insert`, `UpdateDetails`, `FindByEmail`, `FindAllByEmail`, `FindById`, `GetByRole`, `GetSittersWithProfiles` (one JOIN, §5.8) |
 | `PetRepository` | `Insert`, `Delete`, `GetByOwner` |
 | `SitterProfileRepository` | `GetByUserId`, `Upsert` (insert-or-update, 1:1) |
-| `BookingRepository` | `Insert`, `UpdateStatus`, `GetForOwner`, `GetForSitter`, `GetById` |
-| `ChatRepository` | `Insert`, `GetForBooking` (chronological, per-booking scoped) |
+| `BookingRepository` | `Insert`, `UpdateStatus`, `GetForOwner`, `GetForSitter`, `GetById`, `GetDetailsForOwner` / `GetDetailsForSitter` (booking + owner + sitter + pet in one JOIN, §5.8) |
+| `ChatRepository` | `Insert`, `GetForBooking` (chronological, per-booking scoped), `GetForBookingWithSenderNames` (with sender names, one JOIN, §5.8) |
 
 ---
 
@@ -502,9 +502,9 @@ accept, and they are stated here rather than hidden.
   stored, so on the cloud database other PCs don't see them: the "pet images on
   the sitter side" feature only works when owner and sitter use the same PC.
 - **Latency.** Each query to the cloud server costs about **195 ms** (measured,
-  pooled), and the dashboards currently make one query per row, so some screens
-  take several seconds to load on the cloud database. Batching those queries is
-  the planned next fix.
+  pooled), and queries run on the UI thread, so every click that touches the
+  database pauses for its round trips. Lists are loaded with one query each (see
+  "Performance on the cloud database" below), which keeps that to about a second.
 - **Notice wording.** The login screen's notice starts with "Offline" in both
   fallback cases, including "Cloud database error"; the header and tooltip give
   the accurate reason.
@@ -530,6 +530,53 @@ accept, and they are stated here rather than hidden.
   `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase`.
 
 Counts and the per-test list are in `docs/UnitTests.md`.
+
+### 5.8 Performance on the cloud database
+
+Every query to the cloud server is a network round trip of about **195 ms**,
+and queries run on the UI thread, so a screen's speed is decided by how MANY
+queries it makes. The original dashboards looked related rows up one at a time:
+the sitter of each booking, the pet list again for each booking, the profile of
+each sitter, the sender of each chat message. On SQLite that was invisible; on
+the cloud database it froze the window for seconds, long enough that UI
+Automation's own calls timed out while measuring it.
+
+**Fix: one query per list.** The repositories gained JOIN loaders
+(`GetDetailsForOwner` / `GetDetailsForSitter` return `BookingDetails`: a booking
+plus its owner, sitter and pet; `GetSittersWithProfiles` returns
+`SitterListing`s; `GetForBookingWithSenderNames` fills `ChatMessage.SenderName`).
+Joined tables' columns are aliased with a prefix (`o_`, `s_`, `p_`, `u_`, `sp_`)
+so one row maps to several objects, and joined users never include password
+hashes. The views build their lists from these, derive the Chats tab from the
+same result as the bookings, check chat participation with a single
+`GetById`, and reuse the owner's already-loaded pet list for the booking form.
+`BookingService.AcceptRequest` uses one query for both its guard and its
+overlap check.
+
+**A listener leak, also fixed.** Each dashboard subscribed to
+`BookingRepository.BookingStatusChanged` and never unsubscribed, so every past
+login's dashboard kept reloading its lists (for the current user) on every
+status change: the more logins in a session, the slower each Accept. The
+handler is now detached on `Unloaded`, and the explicit reloads it duplicated
+after a status change were removed.
+
+**Measured** in the real app with a temporary UI-automation harness, against a
+throwaway database on the cloud server seeded with realistic data, before and
+after the change (same data, same machine, 2026-10-07):
+
+| Action (real app, cloud database, 10 sitters / 10 bookings / 20-message chat) | Before | After |
+|---|--:|--:|
+| Owner: log in until the dashboard responds | 11.0 s | 1.2 s |
+| Sitter: log in until the dashboard responds | 4.9 s | 0.9 s |
+| Open a 20-message chat | 4.5 s | 0.6 s |
+| Sitter: accept a request (until its chat is open) | 14.3 s | 1.2 s |
+| Owner: select a sitter in Find Sitters | 0.47 s | 0.28 s |
+| Send a chat message | 0.93 s | 0.74 s |
+
+The structural cause is guarded by tests: `Database.ConnectionsOpened` counts
+round trips, and repository tests assert each loader is ONE query however many
+rows there are (they also run against MySQL in the parity suite). The screen
+timings themselves are not an automated test.
 
 ---
 

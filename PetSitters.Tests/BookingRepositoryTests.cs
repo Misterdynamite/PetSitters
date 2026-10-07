@@ -149,6 +149,99 @@ namespace PetSitters.Tests
             Assert.AreEqual(55m, Services.Bookings.GetById(booking.Id).DailyRateAtBooking);
         }
 
+        // ---- One-query loaders for the dashboards (cloud latency) ----
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        // FR-O4 / FR-S4: the owner's list shows sitter and pet without extra lookups.
+        public void GetDetailsForOwner_IncludesSitterAndPet()
+        {
+            GivenOwnerSitterAndPet();
+            Booking booking = InsertBooking(BookingStatus.Pending);
+
+            BookingDetails details = Services.Bookings.GetDetailsForOwner(_ownerId).Single();
+
+            Assert.AreEqual(booking.Id, details.Booking.Id);
+            Assert.AreEqual("Sam", details.Sitter.FullName);
+            Assert.AreEqual("Olivia", details.Owner.FullName);
+            Assert.AreEqual("Rex", details.Pet.Name);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        // "All my pets" bookings have no PetId: the LEFT JOIN must still return the booking.
+        public void GetDetailsForSitter_AllMyPetsBooking_HasNoPet_ButIsStillListed()
+        {
+            GivenOwnerSitterAndPet();
+            Services.Bookings.Insert(new Booking
+            {
+                OwnerUserId = _ownerId, SitterUserId = _sitterId, PetId = null,
+                StartDate = DateTime.Today, EndDate = DateTime.Today.AddDays(1),
+                Status = BookingStatus.Pending, DailyRateAtBooking = 45m, CreatedUtc = DateTime.UtcNow
+            });
+
+            BookingDetails details = Services.Bookings.GetDetailsForSitter(_sitterId).Single();
+
+            Assert.IsNull(details.Pet);
+            Assert.AreEqual("Olivia", details.Owner.FullName, "The sitter's view needs the owner's details.");
+            Assert.AreEqual("Wellington", details.Owner.Location);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        // Joined users carry display details only: no other person's password hash leaves the database.
+        public void GetDetails_JoinedUsers_DoNotCarryPasswordHashes()
+        {
+            GivenOwnerSitterAndPet();
+            InsertBooking(BookingStatus.Pending);
+
+            BookingDetails details = Services.Bookings.GetDetailsForSitter(_sitterId).Single();
+
+            Assert.IsNull(details.Owner.PasswordHash);
+            Assert.IsNull(details.Owner.PasswordSalt);
+            Assert.IsNull(details.Sitter.PasswordHash);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        public void GetDetailsForSitter_ExcludesOtherSittersBookings()
+        {
+            GivenOwnerSitterAndPet();
+            InsertBooking(BookingStatus.Pending);
+            int otherSitter = Services.Auth.Register("sitter2@test.com", "secret1", UserRole.Sitter,
+                "Second Sitter", "021", "Auckland").User.Id;
+
+            Assert.AreEqual(0, Services.Bookings.GetDetailsForSitter(otherSitter).Count);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Performance")]
+        [TestCategory("Positive")]
+        // The cloud-latency fix: loading a dashboard's bookings is ONE round trip
+        // however many bookings there are (the old screens made 1 + 2 per booking).
+        public void GetDetails_IsOneRoundTrip_RegardlessOfRowCount()
+        {
+            GivenOwnerSitterAndPet();
+            for (int i = 0; i < 6; i++)
+                InsertBooking(BookingStatus.Pending);
+
+            int before = Db.ConnectionsOpened;
+            List<BookingDetails> owners = Services.Bookings.GetDetailsForOwner(_ownerId);
+            List<BookingDetails> sitters = Services.Bookings.GetDetailsForSitter(_sitterId);
+
+            Assert.AreEqual(6, owners.Count);
+            Assert.AreEqual(6, sitters.Count);
+            Assert.AreEqual(2, Db.ConnectionsOpened - before, "Each loader must be a single query.");
+        }
+
         // ---- helpers ----
         private void GivenOwnerSitterAndPet()
         {

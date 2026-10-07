@@ -229,9 +229,12 @@ cloud database.
   `%AppData%\PetSitters\UserImages` on the PC that uploaded them, and only that
   file path is stored. On the cloud database, other PCs see the record but not
   the picture (so pet images on the sitter side only show on the same PC).
-- **Latency on the cloud database.** Each query takes about 195 ms (measured),
-  and the dashboards currently make one query per row, so some screens take
-  several seconds to load. Batching those queries is the next planned fix.
+- **Latency on the cloud database.** Each query takes about 195 ms (measured).
+  Every list now loads with ONE query (a JOIN), not one query per row. Measured
+  in the real app against the cloud server with realistic data (before -> after):
+  owner dashboard 11.0 s -> 1.2 s, sitter dashboard 4.9 s -> 0.9 s, opening a
+  20-message chat 4.5 s -> 0.6 s, accepting a request 14.3 s -> 1.2 s. Queries
+  still run on the UI thread, so each click pauses for a few round trips.
 - **Authorisation is client-side only.** This is a two-tier design: every copy of
   the app connects to the database directly with the credential from `.env`, so
   rules such as "only the owner can cancel" or "chat is per booking" are enforced

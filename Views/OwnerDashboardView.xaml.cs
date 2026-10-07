@@ -26,18 +26,28 @@ namespace PetSitters.Views
             _services = services;
             _shell = shell;
 
+            // Each loader is ONE query (see the JOIN methods in the repositories):
+            // at ~195 ms per cloud round trip, per-row lookups made this dashboard
+            // take ~11 s to open. LoadBookings also fills the Chats tab.
             LoadDetails();
             LoadPets();
             LoadSitters();
             LoadBookings();
-            LoadChats();
-            // refresh when bookings change elsewhere (e.g., sitter cancels)
-            _services.Bookings.BookingStatusChanged += (id, status) =>
-            {
-                // UI thread dispatch
-                Dispatcher.Invoke(() => { LoadBookings(); });
-            };
+
+            // Refresh the lists whenever a booking's status changes (this dashboard's
+            // own cancel, for example). The handler is detached when the dashboard is
+            // removed (logout): without that, every past login's dashboard stayed
+            // subscribed and kept reloading in the background, for the wrong user.
+            _onBookingStatusChanged = (id, status) => Dispatcher.Invoke(LoadBookings);
+            _services.Bookings.BookingStatusChanged += _onBookingStatusChanged;
+            Unloaded += (s, e) => _services.Bookings.BookingStatusChanged -= _onBookingStatusChanged;
         }
+
+        private readonly Action<int, BookingStatus> _onBookingStatusChanged;
+
+        // The owner's pets, as last loaded: reused for the booking form's pet
+        // list so picking a sitter doesn't query the database again.
+        private List<Pet> _myPets = new List<Pet>();
 
         private User Me => _services.CurrentUser;
         // temporary storage for the image chosen when adding a new pet
@@ -107,7 +117,8 @@ namespace PetSitters.Views
         // ---- FR-4: pets ------------------------------------------------------------
         private void LoadPets()
         {
-            PetsList.ItemsSource = _services.Pets.GetByOwner(Me.Id);
+            _myPets = _services.Pets.GetByOwner(Me.Id);
+            PetsList.ItemsSource = _myPets;
             try { var btn = FindName("DeletePetButton") as Button; if (btn != null) btn.IsEnabled = false; } catch { }
         }
 
@@ -246,13 +257,10 @@ namespace PetSitters.Views
         // ---- FR-5: browse sitters --------------------------------------------------
         private void LoadSitters()
         {
-            var rows = new List<SitterRow>();
-            foreach (User sitter in _services.Users.GetByRole(UserRole.Sitter))
-            {
-                SitterProfile profile = _services.SitterProfiles.GetByUserId(sitter.Id);
-                rows.Add(new SitterRow(sitter, profile));
-            }
-            SittersList.ItemsSource = rows;
+            // One query for every sitter and their profile (was 1 + one per sitter).
+            SittersList.ItemsSource = _services.Users.GetSittersWithProfiles()
+                .Select(listing => new SitterRow(listing.Sitter, listing.Profile))
+                .ToList();
         }
 
         private void SittersList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -285,7 +293,7 @@ namespace PetSitters.Views
         private void RefreshBookingPetCombo()
         {
             var pets = new List<Pet> { new Pet { Id = 0, Name = "All my pets" } };
-            pets.AddRange(_services.Pets.GetByOwner(Me.Id));
+            pets.AddRange(_myPets);   // cached by LoadPets, which runs after every pet add/delete
             BookingPetCombo.ItemsSource = pets;
             BookingPetCombo.SelectedIndex = 0;
         }
@@ -350,21 +358,21 @@ namespace PetSitters.Views
         // ---- FR-6: my bookings list ------------------------------------------------
         private void LoadBookings()
         {
-            var rows = new List<OwnerBookingRow>();
-            foreach (Booking b in _services.Bookings.GetForOwner(Me.Id))
-            {
-                User sitter = _services.Users.FindById(b.SitterUserId);
-                string petName = "All my pets";
-                if (b.PetId.HasValue)
-                {
-                    Pet p = _services.Pets.GetByOwner(Me.Id).FirstOrDefault(x => x.Id == b.PetId.Value);
-                    petName = p?.Name ?? "(removed pet)";
-                }
-                rows.Add(new OwnerBookingRow(b, sitter?.FullName ?? "(unknown)", petName));
-            }
+            // ONE query for all the owner's bookings with sitter and pet; the
+            // Chats tab is the accepted subset of the same rows.
+            List<OwnerBookingRow> rows = _services.Bookings.GetDetailsForOwner(Me.Id)
+                .Select(d => new OwnerBookingRow(d.Booking, d.Sitter?.FullName ?? "(unknown)", PetName(d)))
+                .ToList();
             BookingsList.ItemsSource = rows;
-            // Keep chats list in sync with bookings view
-            LoadChats();
+            ShowChats(rows);
+        }
+
+        /// <summary>"All my pets" when no pet was named; "(removed pet)" if it was deleted since.</summary>
+        private static string PetName(BookingDetails details)
+        {
+            if (!details.Booking.PetId.HasValue)
+                return "All my pets";
+            return details.Pet?.Name ?? "(removed pet)";
         }
 
         // ---- REQ-PO-07: owner cancels a booking ------------------------------------
@@ -400,42 +408,30 @@ namespace PetSitters.Views
                 ChatTab.Visibility = Visibility.Collapsed;
             }
 
-            LoadBookings();   // also reloads the chat list, dropping this booking
+            // No explicit reload: CancelBooking changes the status, which raises
+            // BookingStatusChanged, and the listener above has already reloaded
+            // both lists (reloading again would be a wasted cloud round trip).
             CancelStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
             CancelStatus.Text = $"Booking with {row.SitterName} cancelled.";
         }
 
-        // ---- Chats for owner (and owners who are also sitters) ------------------
-        private void LoadChats()
+        // ---- Chats for the owner ----------------------------------------------
+        // Only this account's bookings as OWNER: since REQ-GR-06 the same person's
+        // sitter side is a separate account, so there is no "also a sitter" case.
+        private void ShowChats(List<OwnerBookingRow> bookingRows)
         {
-            var rows = new List<OwnerBookingRow>();
-            // Accepted bookings where current user is the owner
-            foreach (Booking b in _services.Bookings.GetForOwner(Me.Id).Where(b => b.Status == PetSitters.Models.BookingStatus.Accepted))
-            {
-                User sitter = _services.Users.FindById(b.SitterUserId);
-                string petName = "All my pets";
-                if (b.PetId.HasValue)
-                {
-                    Pet p = _services.Pets.GetByOwner(Me.Id).FirstOrDefault(x => x.Id == b.PetId.Value);
-                    petName = p?.Name ?? "(removed pet)";
-                }
-                rows.Add(new OwnerBookingRow(b, sitter?.FullName ?? "(unknown)", petName));
-            }
-            // Also include bookings where current user is the sitter and another user is the owner
-            foreach (Booking b in _services.Bookings.GetForSitter(Me.Id).Where(b => b.Status == PetSitters.Models.BookingStatus.Accepted))
-            {
-                User owner = _services.Users.FindById(b.OwnerUserId);
-                string petName = "All my pets";
-                if (b.PetId.HasValue)
-                {
-                    Pet p = _services.Pets.GetByOwner(b.OwnerUserId).FirstOrDefault(x => x.Id == b.PetId.Value);
-                    petName = p?.Name ?? "(removed pet)";
-                }
-                // Reuse OwnerBookingRow to show counterpart name in SitterName column
-                rows.Add(new OwnerBookingRow(b, owner?.FullName ?? "(unknown)", petName));
-            }
-            ChatsList.ItemsSource = rows;
+            ChatsList.ItemsSource = bookingRows.Where(r => r.Status == PetSitters.Models.BookingStatus.Accepted.ToString()).ToList();
             ChatSelectedDetails.Text = "Select a chat to open.";
+        }
+
+        /// <summary>
+        /// The booking, if this user is its owner or sitter; null otherwise.
+        /// One lookup by id (it used to load every booking the user has).
+        /// </summary>
+        private Booking FindMyBooking(int bookingId)
+        {
+            Booking booking = _services.Bookings.GetById(bookingId);
+            return booking != null && (booking.OwnerUserId == Me.Id || booking.SitterUserId == Me.Id) ? booking : null;
         }
 
         private void ChatsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -460,8 +456,7 @@ namespace PetSitters.Views
 
         private void ShowChatForBooking(int bookingId)
         {
-            var booking = _services.Bookings.GetForOwner(Me.Id).FirstOrDefault(b => b.Id == bookingId)
-                          ?? _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == bookingId);
+            var booking = FindMyBooking(bookingId);
             if (booking == null)
             {
                 MessageBox.Show("You are not a participant in this booking.");
@@ -477,11 +472,12 @@ namespace PetSitters.Views
         private void RefreshChat()
         {
             if (!_activeChatBookingId.HasValue) return;
-            var messages = _services.Chats.GetForBooking(_activeChatBookingId.Value);
+            // One query: messages with their senders' names (was one lookup per message).
+            var messages = _services.Chats.GetForBookingWithSenderNames(_activeChatBookingId.Value);
             ChatMessagesList.Items.Clear();
             foreach (var m in messages)
             {
-                var text = new TextBlock { Text = $"{(_services.Users.FindById(m.SenderUserId)?.FullName ?? "Unknown")}: {m.MessageText}", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,4,0,4) };
+                var text = new TextBlock { Text = $"{m.SenderName ?? "Unknown"}: {m.MessageText}", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,4,0,4) };
                 ChatMessagesList.Items.Add(text);
             }
             ChatScroll.ScrollToEnd();
@@ -497,8 +493,7 @@ namespace PetSitters.Views
             var text = ChatInput.Text?.Trim();
             if (string.IsNullOrEmpty(text)) return;
 
-            var booking = _services.Bookings.GetForOwner(Me.Id).FirstOrDefault(b => b.Id == _activeChatBookingId.Value)
-                          ?? _services.Bookings.GetForSitter(Me.Id).FirstOrDefault(b => b.Id == _activeChatBookingId.Value);
+            var booking = FindMyBooking(_activeChatBookingId.Value);
             if (booking == null)
             {
                 MessageBox.Show("You are not a participant in this booking.");

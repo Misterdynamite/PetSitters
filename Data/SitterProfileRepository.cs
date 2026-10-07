@@ -53,18 +53,34 @@ VALUES (@userId, @availability, @exp, @prefs, @quals, @rate, @bio)"
             }
         }
 
+        /// <summary>Every SitterProfiles column, for aliased JOIN selects (see UserRepository.GetSittersWithProfiles).</summary>
+        internal static readonly string[] Columns =
+            { "Id", "UserId", "Availability", "ExperienceYears", "Preferences", "Qualifications", "DailyRate", "Bio" };
+
         private static SitterProfile Map(DbDataReader reader)
         {
+            return MapJoined(reader, string.Empty);
+        }
+
+        /// <summary>
+        /// Maps a profile whose columns were selected with <paramref name="prefix"/>
+        /// (empty for a plain SELECT *); null if a LEFT JOIN found no profile.
+        /// </summary>
+        internal static SitterProfile MapJoined(DbDataReader reader, string prefix)
+        {
+            if (reader.IsMissing(prefix + "Id"))
+                return null;
+
             return new SitterProfile
             {
-                Id = Convert.ToInt32(reader["Id"]),
-                UserId = Convert.ToInt32(reader["UserId"]),
-                Availability = reader["Availability"] as string,
-                ExperienceYears = Convert.ToInt32(reader["ExperienceYears"]),
-                Preferences = reader["Preferences"] as string,
-                Qualifications = reader["Qualifications"] as string,
-                DailyRate = Convert.ToDecimal(reader["DailyRate"]),
-                Bio = reader["Bio"] as string
+                Id = Convert.ToInt32(reader[prefix + "Id"]),
+                UserId = Convert.ToInt32(reader[prefix + "UserId"]),
+                Availability = reader[prefix + "Availability"] as string,
+                ExperienceYears = Convert.ToInt32(reader[prefix + "ExperienceYears"]),
+                Preferences = reader[prefix + "Preferences"] as string,
+                Qualifications = reader[prefix + "Qualifications"] as string,
+                DailyRate = Convert.ToDecimal(reader[prefix + "DailyRate"]),
+                Bio = reader[prefix + "Bio"] as string
             };
         }
     }

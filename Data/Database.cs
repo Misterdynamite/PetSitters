@@ -28,6 +28,16 @@ namespace PetSitters.Data
         /// <summary>The engine this instance talks to.</summary>
         public DatabaseProvider Provider { get; }
 
+        private int _connectionsOpened;
+
+        /// <summary>
+        /// How many connections this instance has opened, i.e. how many database
+        /// round trips it has made. A diagnostic for tests: on the cloud database
+        /// each one costs ~195 ms, so tests use it to prove a list loads in ONE
+        /// query however many rows it has (no per-row lookups).
+        /// </summary>
+        public int ConnectionsOpened => System.Threading.Volatile.Read(ref _connectionsOpened);
+
         /// <summary>
         /// Where the data lives, for display and diagnostics: the .db file path
         /// for SQLite, or "server:port/database" for MySQL. Never contains credentials.
@@ -93,6 +103,9 @@ namespace PetSitters.Data
         /// </summary>
         public DbConnection OpenConnection()
         {
+            // Every repository method opens one connection and runs one command,
+            // so this count equals database round trips (see ConnectionsOpened).
+            System.Threading.Interlocked.Increment(ref _connectionsOpened);
             DbConnection connection = Provider == DatabaseProvider.Sqlite
                 ? (DbConnection)new SQLiteConnection(_connectionString)
                 : new MySqlConnection(_connectionString);

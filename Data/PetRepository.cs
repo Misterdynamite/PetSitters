@@ -65,19 +65,35 @@ VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @image, @notes);
             return pets;
         }
 
+        /// <summary>Every Pets column, for aliased JOIN selects (see BookingRepository.GetDetailsForOwner).</summary>
+        internal static readonly string[] Columns =
+            { "Id", "OwnerUserId", "Name", "Species", "Breed", "Age", "AgeMonths", "Notes", "ImagePath" };
+
         private static Pet Map(DbDataReader reader)
         {
-                return new Pet
+            return MapJoined(reader, string.Empty);
+        }
+
+        /// <summary>
+        /// Maps a pet whose columns were selected with <paramref name="prefix"/>
+        /// (empty for a plain SELECT *); null if a LEFT JOIN found no pet.
+        /// </summary>
+        internal static Pet MapJoined(DbDataReader reader, string prefix)
+        {
+            if (reader.IsMissing(prefix + "Id"))
+                return null;
+
+            return new Pet
             {
-                Id = Convert.ToInt32(reader["Id"]),
-                OwnerUserId = Convert.ToInt32(reader["OwnerUserId"]),
-                Name = reader["Name"] as string,
-                Species = reader["Species"] as string,
-                Breed = reader["Breed"] as string,
-                Age = Convert.ToInt32(reader["Age"]),
-                AgeMonths = Convert.ToInt32(reader["AgeMonths"]),
-                Notes = reader["Notes"] as string,
-                ImagePath = reader["ImagePath"] as string
+                Id = Convert.ToInt32(reader[prefix + "Id"]),
+                OwnerUserId = Convert.ToInt32(reader[prefix + "OwnerUserId"]),
+                Name = reader[prefix + "Name"] as string,
+                Species = reader[prefix + "Species"] as string,
+                Breed = reader[prefix + "Breed"] as string,
+                Age = Convert.ToInt32(reader[prefix + "Age"]),
+                AgeMonths = Convert.ToInt32(reader[prefix + "AgeMonths"]),
+                Notes = reader[prefix + "Notes"] as string,
+                ImagePath = reader[prefix + "ImagePath"] as string
             };
         }
     }

@@ -107,5 +107,33 @@ namespace PetSitters.Tests
             Assert.AreEqual("second", messages[1].MessageText);
             Assert.AreEqual("third", messages[2].MessageText);
         }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Performance")]
+        // FR-O5 / FR-S5: the chat panel shows each sender's name. They now come
+        // with the messages in ONE query; the panel used to look up the sender of
+        // every message separately (a 20-message chat took ~4.5 s on the cloud).
+        public void GetForBookingWithSenderNames_OneQuery_InOrder_WithNames()
+        {
+            int bookingId = NewAcceptedBooking();
+            var baseTime = new DateTime(2026, 1, 1, 9, 0, 0, DateTimeKind.Utc);
+            for (int i = 0; i < 5; i++)
+                Services.Chats.Insert(new ChatMessage
+                {
+                    BookingId = bookingId, SenderUserId = i % 2 == 0 ? _ownerId : _sitterId,
+                    MessageText = "m" + i, CreatedUtc = baseTime.AddMinutes(i)
+                });
+
+            int before = Db.ConnectionsOpened;
+            List<ChatMessage> messages = Services.Chats.GetForBookingWithSenderNames(bookingId);
+
+            Assert.AreEqual(1, Db.ConnectionsOpened - before, "Must be a single query, whatever the message count.");
+            Assert.AreEqual(5, messages.Count);
+            Assert.AreEqual("m0", messages[0].MessageText);
+            Assert.AreEqual("Olivia", messages[0].SenderName);
+            Assert.AreEqual("Sam", messages[1].SenderName);
+        }
     }
 }

@@ -57,6 +57,37 @@ VALUES (@booking, @sender, @text, @created);
             return list;
         }
 
+        /// <summary>
+        /// Like <see cref="GetForBooking"/>, but each message also carries its
+        /// sender's display name (<see cref="ChatMessage.SenderName"/>), in ONE
+        /// query. The chat panel used to look up the sender once per message,
+        /// which on the cloud database made a 20-message chat take seconds.
+        /// Ordered by time, then id, so equal timestamps keep insertion order.
+        /// </summary>
+        public List<ChatMessage> GetForBookingWithSenderNames(int bookingId)
+        {
+            var list = new List<ChatMessage>();
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT m.*, u.FullName AS SenderName FROM ChatMessages m" +
+                    " LEFT JOIN Users u ON u.Id = m.SenderUserId" +
+                    " WHERE m.BookingId = @booking ORDER BY m.CreatedUtc ASC, m.Id ASC;";
+                command.AddParameter("@booking", bookingId);
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        ChatMessage message = Map(reader);
+                        message.SenderName = reader["SenderName"] as string;
+                        list.Add(message);
+                    }
+                }
+            }
+            return list;
+        }
+
         private static ChatMessage Map(DbDataReader reader)
         {
             return new ChatMessage

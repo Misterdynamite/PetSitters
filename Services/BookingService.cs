@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using PetSitters.Data;
 using PetSitters.Models;
@@ -42,17 +43,21 @@ namespace PetSitters.Services
         /// </summary>
         public BookingResult AcceptRequest(int bookingId, int sitterUserId)
         {
-            Booking booking = _bookings.GetById(bookingId);
+            // One query serves both the guard and the overlap check: the request
+            // must be among this sitter's own bookings (otherwise it's someone
+            // else's, or doesn't exist). That saves a round trip to the cloud database.
+            List<Booking> sittersBookings = _bookings.GetForSitter(sitterUserId);
+            Booking booking = sittersBookings.FirstOrDefault(b => b.Id == bookingId);
 
             // Guards: a sitter may only act on their own pending requests.
-            if (booking == null || booking.SitterUserId != sitterUserId)
+            if (booking == null)
                 return BookingResult.Fail("That booking request could not be found.");
             if (booking.Status != BookingStatus.Pending)
                 return BookingResult.Fail("Only pending requests can be accepted.");
 
             // Only *accepted* bookings block: other pending requests for the same
             // dates are just competing offers, and the sitter is free to pick one.
-            Booking clash = _bookings.GetForSitter(sitterUserId)
+            Booking clash = sittersBookings
                 .Where(b => b.Id != booking.Id && b.Status == BookingStatus.Accepted)
                 .OrderBy(b => b.StartDate)
                 .FirstOrDefault(b => b.Overlaps(booking));

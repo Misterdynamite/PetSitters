@@ -42,7 +42,7 @@ flowchart LR
 | 0 | **No secrets committed** | CI | A `.env` or `.env.*` file other than `.env.example` is tracked in git. `.env` holds the database password and the repository is public. |
 | 1 | **Successful build** | CI + local | The WPF app doesn't compile (Release in CI). |
 | 2 | **Smoke tests**: 12 tests tagged `Smoke` | CI + local build | Any core path is broken: password hashing, reading `.env` and `DATABASE_URL`, choosing the database at launch (cloud when reachable, local fallback when not), register, log in (< 1 s, on SQLite), schema/migration start-up, booking request, accept, chat persistence. |
-| 3 | **Full logic + integration suite**: 238 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 95 MySQL parity cases are excluded (see below). |
+| 3 | **Full logic + integration suite**: 245 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 102 MySQL parity cases are excluded (see below). |
 | 4 | **UI regression suite**: 8 FlaUI tests | Local, before merge | An end-to-end journey breaks (see below for why it isn't in CI). |
 
 Gates run in order and **stop at the first failure**. Smoke runs before the
@@ -138,11 +138,11 @@ the same behaviour on MySQL. It defines 9 test classes tagged
 `PetRepositoryTests_MySql`, `SitterProfileRepositoryTests_MySql`,
 `SharedEmailTests_MySql`). Each inherits **every** test of the matching SQLite
 class and swaps only the database (`DatabaseTestBase.CreateDatabase()`), giving
-**95 executed cases**. They catch SQL only one engine accepts (the
+**102 executed cases**. They catch SQL only one engine accepts (the
 engine-specific SQL lives in `Data/SqlDialect.cs`), values MySQL's strict mode
 rejects, and collation or ordering differences.
 
-**They are strictly opt-in.** Without one of the variables below, all 95 are
+**They are strictly opt-in.** Without one of the variables below, all 102 are
 reported **Skipped** (Inconclusive), never failed. The opt-in lives in the test
 code rather than in a filter because Visual Studio's *Run All Tests* ignores
 command-line filters.
@@ -165,7 +165,7 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
   two people run the suite at the same time.
 - **It is slow:** about 6 minutes, because every query is a round trip to the
   server.
-- **Last result (2026-10-07): 95/95 passed** against the real cloud MySQL server.
+- **Last result (2026-10-07): 102/102 passed** against the real cloud MySQL server.
 
 ## Why the UI suite runs locally, not in CI (alternative workflow)
 
@@ -201,7 +201,7 @@ the start-up choice (REQ-GR-09, proposed):
 |------|---------|
 | Build + smoke + full suite (local gate) | `MSBuild.exe PetSitters.csproj /t:Restore,Build /p:Configuration=Debug` |
 | Build only | add `/p:SkipTests=true` |
-| Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 95 MySQL cases are listed as Skipped unless opted in) |
+| Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 102 MySQL cases are listed as Skipped unless opted in) |
 | MySQL parity suite (opt-in) | set `PETSITTERS_TEST_MYSQL=1` or `PETSITTERS_TEST_MYSQL_URL`, then `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql` (about 6 min) |
 | UI regression suite | `dotnet test PetSitters.UiTests -c Debug` (interactive desktop; don't touch the mouse) |
 | CI | Automatic on push or PR to `main`; manual via **Actions → CI → Run workflow** |

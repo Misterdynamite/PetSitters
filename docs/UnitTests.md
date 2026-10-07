@@ -10,10 +10,10 @@ requirements traceability matrix, and how to run everything.
   database configuration: `AppConfig`/`EnvFile` and `DatabaseSelector`), the
   domain `Models`, the `Data` repositories, and `MySqlUrl` (turning
   `DATABASE_URL` into a connection string).
-- **Result:** **119 test methods → 238 executed cases on SQLite** (the
+- **Result:** **126 test methods → 245 executed cases on SQLite** (the
   difference is `[DataRow]` data-driven expansion). All passing (last run
   2026-10-07).
-- **Plus, opt-in:** **95 MySQL parity cases** that re-run the database tests
+- **Plus, opt-in:** **102 MySQL parity cases** that re-run the database tests
   against a real MySQL server. All passing against the real server on
   2026-10-07. They are skipped unless you ask for them (see
   [MySQL parity](#mysql-parity-opt-in)).
@@ -208,13 +208,14 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `Login_WithMissingInput_Fails` `[DataRow ×3]` | Empty email/password combinations are rejected. |
 | `Login_DoesNotRevealWhetherEmailIsRegistered` | Wrong password and unknown email return the **same** message (no user enumeration). |
 
-#### `UserRepositoryTests` — 4 methods · FR-O1, FR-O2, FR-S1
+#### `UserRepositoryTests` — 5 methods · FR-O1, FR-O2, FR-S1
 | Test | What it verifies |
 |------|------------------|
 | `Insert_AssignsId_AndCanBeFoundByEmailAndId` | Insert assigns an id; lookups by email and id work. |
 | `EmailExists_IsCaseInsensitive` | Email uniqueness check ignores casing. |
 | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | Browsing sitters returns only sitters, name-ordered. |
 | `UpdateDetails_PersistsEditedFields` | Edited personal details are saved. |
+| `GetSittersWithProfiles_OneQuery_IncludesSittersWithoutProfiles` | Find Sitters loads every sitter with their profile in ONE query (asserted via `Database.ConnectionsOpened`); a sitter without a profile is listed with a null profile; owners aren't listed; joined users carry no password hash. |
 
 #### `PetRepositoryTests` — 4 methods · FR-O3
 | Test | What it verifies |
@@ -231,7 +232,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `Upsert_UpdatesInPlace_WhenProfileAlreadyExists` | A second save updates in place (1:1, no duplicate). |
 | `GetByUserId_ReturnsNull_WhenSitterHasNoProfileYet` | Missing profile returns null. |
 
-#### `BookingRepositoryTests` — 7 methods / 8 cases · FR-O4, FR-S4, REQ-PO-07
+#### `BookingRepositoryTests` — 12 methods / 13 cases · FR-O4, FR-S4, REQ-PO-07
 | Test | What it verifies |
 |------|------------------|
 | `Insert_BookingIsVisibleToBothOwnerAndSitter` | A request appears in both the owner's and sitter's lists. |
@@ -241,13 +242,19 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `UpdateStatus_Cancel_RemovesBookingFromSittersPendingQueue` | A cancelled booking leaves the sitter's pending requests but stays on the owner's record. |
 | `GetForSitter_DoesNotReturnAnotherSittersBookings` | A sitter sees only their own requests (isolation). |
 | `Insert_PreservesDailyRateSnapshot` | The rate captured at booking time is stored. |
+| `GetDetailsForOwner_IncludesSitterAndPet` | The owner's one-query loader returns each booking with its sitter, owner and pet. |
+| `GetDetailsForSitter_AllMyPetsBooking_HasNoPet_ButIsStillListed` | Boundary: an "All my pets" booking (no pet) still comes back from the LEFT JOIN, with the owner's details. |
+| `GetDetails_JoinedUsers_DoNotCarryPasswordHashes` | Security: joined owner/sitter rows never include another person's password hash or salt. |
+| `GetDetailsForSitter_ExcludesOtherSittersBookings` | Isolation: a sitter's loader returns only their bookings. |
+| `GetDetails_IsOneRoundTrip_RegardlessOfRowCount` | Performance: with 6 bookings, each loader is still exactly ONE database round trip (the old screens made 1 + 2 per booking). |
 
-#### `ChatPersistenceTests` — 3 methods · FR-O5, FR-S5
+#### `ChatPersistenceTests` — 4 methods · FR-O5, FR-S5
 | Test | What it verifies |
 |------|------------------|
 | `Message_IsPersisted_AndReadBackByAFreshRepository` | A message survives being read back by a **new** repository instance (proves the message is persisted, not cached). |
 | `GetForBooking_ReturnsOnlyThatBookingsMessages` | Messages are scoped to their booking (not visible to unrelated bookings/users). |
 | `GetForBooking_ReturnsMessagesInChronologicalOrder` | Messages return oldest-first. |
+| `GetForBookingWithSenderNames_OneQuery_InOrder_WithNames` | The chat panel's loader returns messages in order WITH sender names, in one query (it used to look up each sender separately). |
 
 ### Database configuration & launch-time choice (REQ-GR-09, proposed)
 
@@ -297,7 +304,7 @@ which is refused (after about 2 s on Windows, which retries a refused connection
 
 ### MySQL parity (opt-in)
 
-**9 classes / 95 cases · REQ-GR-09 · all passing against the real server on
+**9 classes / 102 cases · REQ-GR-09 · all passing against the real server on
 2026-10-07 (about 6 minutes).**
 
 `MySqlParityTests.cs` defines nine `[TestClass, TestCategory("MySql")]`
@@ -342,7 +349,7 @@ internet, so it only runs when one of these is set:
 | `PETSITTERS_TEST_MYSQL=1` | Reuse the server from the app's `DATABASE_URL` (environment variable, or the repo-root `.env`). |
 
 The account needs permission to create and drop databases, so a least-privilege
-app account can't run it. Without either variable, the 95 cases are reported
+app account can't run it. Without either variable, the 102 cases are reported
 **Skipped** (Inconclusive), never failed: that is what happens in Visual
 Studio's Run All Tests. The build gate and CI go further and filter the
 category out (`TestCategory!=MySql`), so they never contact a MySQL server.
@@ -374,7 +381,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
-| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (95 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-07) |
+| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (102 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-07) |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
@@ -396,7 +403,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | **Security** | Salted PBKDF2 hashing, no plaintext storage, no user enumeration, per-booking chat isolation; the database password never appears in an error message or the header tooltip, and an unspecified ssl-mode still requires TLS. |
 | **Functional correctness** | Registration/login rules, booking visibility, cost calculations. |
 | **Reliability** | Bookings and messages persist and read back intact; status changes are durable; the app still opens (on the local database) when the cloud database is unreachable or misconfigured. |
-| **Portability (database engines)** | The same 95 data-layer cases pass on SQLite and on MySQL (opt-in parity run). |
+| **Portability (database engines)** | The same 102 data-layer cases pass on SQLite and on MySQL (opt-in parity run). |
 | **Data quality** | Email/password/rate/age validation via boundary and equivalence tests. |
 | **Maintainability / testability** | Logic is UI-independent and tested directly; isolated temp databases keep tests deterministic; the cloud database is injected into `DatabaseSelector`, so fallback is tested without a network. |
 
@@ -444,22 +451,22 @@ rows are labelled with each kind they contain.
 | Label | Methods | Executed cases |
 |-------|--------:|---------------:|
 | Unit | 44 | 139 |
-| Integration | 75 | 99 |
+| Integration | 82 | 106 |
 | System | 8 | 8 |
 | Acceptance | 6 | 6 |
 | Regression | 10 | 10 |
-| Security | 22 | 33 |
-| Performance | 1 | 1 |
+| Security | 24 | 35 |
+| Performance | 4 | 4 |
 | Usability | 2 | 2 |
 | Smoke | 12 | 12 |
 | Accessibility | 0 | 0 |
-| Positive | 81 | 176 |
-| Negative | 33 | 62 |
-| Boundary | 23 | 94 |
+| Positive | 86 | 181 |
+| Negative | 35 | 64 |
+| Boundary | 24 | 95 |
 | InvalidInput | 28 | 92 |
 | ErrorHandling | 17 | 27 |
 
-(Totals across labels exceed the 238 logic + 8 UI cases because tests carry several labels. The 95 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
+(Totals across labels exceed the 245 logic + 8 UI cases because tests carry several labels. The 102 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
 
 **Known gaps (stated, not hidden):**
 - **Accessibility: none.** REQ-NFR-04 isn't implemented or assessed yet; the
@@ -469,11 +476,13 @@ rows are labelled with each kind they contain.
 - **Performance covers sign-in only.** The high-load E2E test in the milestone
   plan does not exist yet. The build gate checks the sign-in budget on SQLite
   only; the opt-in parity run also checks it on MySQL. Cloud-mode screen times
-  (some dashboards take several seconds over the internet) are not measured by
-  any test.
+  are not measured by an automated test: the before/after figures in
+  docs/Architecture.md were measured once with a temporary harness. What IS
+  automated is the cause: tests assert that each list loads in a single query
+  (`Database.ConnectionsOpened`).
 - **MySQL parity is not in the build gate or CI.** It is opt-in, so a
   MySQL-only regression is caught only when someone runs it (last run
-  2026-10-07, 95/95 passing).
+  2026-10-07, 102/102 passing).
 - **The real cloud path at launch is not automated.** `DatabaseSelectorTests`
   simulate a reachable cloud with SQLite, and the UI tests only exercise the
   local and unreachable cases. Launching against the real cloud database was
@@ -527,6 +536,11 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `BookingRepositoryTests` | `UpdateStatus_Cancel_RemovesBookingFromSittersPendingQueue` | 1 | Integration | Positive |
 | `BookingRepositoryTests` | `GetForSitter_DoesNotReturnAnotherSittersBookings` | 1 | Integration, Security | Negative |
 | `BookingRepositoryTests` | `Insert_PreservesDailyRateSnapshot` | 1 | Integration | Positive |
+| `BookingRepositoryTests` | `GetDetailsForOwner_IncludesSitterAndPet` | 1 | Integration | Positive |
+| `BookingRepositoryTests` | `GetDetailsForSitter_AllMyPetsBooking_HasNoPet_ButIsStillListed` | 1 | Integration | Positive, Boundary |
+| `BookingRepositoryTests` | `GetDetails_JoinedUsers_DoNotCarryPasswordHashes` | 1 | Integration, Security | Negative |
+| `BookingRepositoryTests` | `GetDetailsForSitter_ExcludesOtherSittersBookings` | 1 | Integration, Security | Negative |
+| `BookingRepositoryTests` | `GetDetails_IsOneRoundTrip_RegardlessOfRowCount` | 1 | Integration, Performance | Positive |
 | `BookingServiceTests` | `AcceptRequest_WithNoClash_AcceptsAndPersists` | 1 | Smoke, Integration | Positive |
 | `BookingServiceTests` | `AcceptRequest_OverlappingAnAcceptedBooking_IsRejectedAndStaysPending` | 1 | Integration | Negative |
 | `BookingServiceTests` | `AcceptRequest_BackToBackWithAcceptedBooking_IsAccepted` | 1 | Integration | Positive, Boundary |
@@ -558,6 +572,7 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `ChatPersistenceTests` | `Message_IsPersisted_AndReadBackByAFreshRepository` | 1 | Smoke, Integration | Positive |
 | `ChatPersistenceTests` | `GetForBooking_ReturnsOnlyThatBookingsMessages` | 1 | Integration, Security | Negative |
 | `ChatPersistenceTests` | `GetForBooking_ReturnsMessagesInChronologicalOrder` | 1 | Integration | Positive |
+| `ChatPersistenceTests` | `GetForBookingWithSenderNames_OneQuery_InOrder_WithNames` | 1 | Integration, Performance | Positive |
 | `DatabaseConfigurationTests` | `EnvFile_ParsesKeyValuePairs_IgnoringCommentsAndBlanks` | 1 | Unit, Smoke | Positive |
 | `DatabaseConfigurationTests` | `EnvFile_ValueFormats` | 6 | Unit | Positive, Boundary |
 | `DatabaseConfigurationTests` | `EnvFile_MalformedLines_AreIgnored` | 1 | Unit | InvalidInput, ErrorHandling |
@@ -594,6 +609,7 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `UserRepositoryTests` | `Insert_AssignsId_AndCanBeFoundByEmailAndId` | 1 | Integration | Positive |
 | `UserRepositoryTests` | `EmailExists_IsCaseInsensitive` | 1 | Integration | Positive, Negative |
 | `UserRepositoryTests` | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | 1 | Integration | Positive |
+| `UserRepositoryTests` | `GetSittersWithProfiles_OneQuery_IncludesSittersWithoutProfiles` | 1 | Integration, Performance | Positive |
 | `UserRepositoryTests` | `UpdateDetails_PersistsEditedFields` | 1 | Integration | Positive |
 | `PetRepositoryTests` | `Insert_ThenGetByOwner_ReturnsThePets` | 1 | Integration | Positive |
 | `PetRepositoryTests` | `Insert_PersistsYearsAndOptionalMonths` | 1 | Integration | Positive |

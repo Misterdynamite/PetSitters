@@ -71,6 +71,31 @@ namespace PetSitters.Tests
         [TestMethod]
         [TestCategory("Integration")]
         [TestCategory("Positive")]
+        [TestCategory("Performance")]
+        // FR-O1: Find Sitters loads every sitter WITH their profile in one query
+        // (it used to be 1 + one per sitter). A sitter without a profile yet is
+        // still listed, with a null profile; owners are not listed.
+        public void GetSittersWithProfiles_OneQuery_IncludesSittersWithoutProfiles()
+        {
+            User bob = NewUser("sitter-b@test.com", UserRole.Sitter, "bob");
+            NewUser("sitter-a@test.com", UserRole.Sitter, "Ann");
+            NewUser("owner@test.com", UserRole.Owner, "Olivia");
+            Services.SitterProfiles.Upsert(new SitterProfile { UserId = bob.Id, DailyRate = 55m, Bio = "Hi" });
+
+            int before = Db.ConnectionsOpened;
+            List<SitterListing> listings = Services.Users.GetSittersWithProfiles();
+
+            Assert.AreEqual(1, Db.ConnectionsOpened - before, "Must be a single query.");
+            Assert.AreEqual(2, listings.Count, "Only sitters are listed.");
+            Assert.AreEqual("Ann", listings[0].Sitter.FullName, "Ordered by name, ignoring case.");
+            Assert.IsNull(listings[0].Profile, "A sitter with no profile yet is listed with a null profile.");
+            Assert.AreEqual(55m, listings[1].Profile.DailyRate);
+            Assert.IsNull(listings[1].Sitter.PasswordHash, "Joined users never carry password hashes.");
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
         // FR-02
         public void UpdateDetails_PersistsEditedFields()
         {

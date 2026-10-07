@@ -19,7 +19,7 @@ database when one is configured and reachable at launch, and falls back to a loc
 | Project | Kind | Framework | Purpose |
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
-| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (238 cases on SQLite, plus 95 opt-in MySQL parity cases) |
+| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (245 cases on SQLite, plus 102 opt-in MySQL parity cases) |
 | `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (8 tests) |
 
 ## Build, test, run — IMPORTANT tooling notes
@@ -68,7 +68,7 @@ Build + run the logic tests (build the app first — see below):
 dotnet test PetSitters.Tests -c Debug
 ```
 
-MySQL parity tests are **opt-in** (otherwise all 95 report Skipped/Inconclusive).
+MySQL parity tests are **opt-in** (otherwise all 102 report Skipped/Inconclusive).
 Set `PETSITTERS_TEST_MYSQL_URL` to a `mysql://` URL for a server where databases
 can be created, or `PETSITTERS_TEST_MYSQL=1` to reuse the server from
 `DATABASE_URL`/`.env` (that user must be allowed to create and drop databases),
@@ -231,9 +231,15 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   `%AppData%\PetSitters\UserImages` on the uploading PC and only that path is stored,
   so on the cloud database other PCs don't see them (pet images on the sitter side
   only work on the same PC).
-- **Cloud latency:** ~195 ms per query, and the dashboards make one query per row
-  (N+1), so some screens take several seconds on the cloud database. Batching fix
-  planned next.
+- **Cloud latency:** ~195 ms per query, so screens must load each list with ONE
+  query: `BookingRepository.GetDetailsForOwner/GetDetailsForSitter`,
+  `UserRepository.GetSittersWithProfiles`, `ChatRepository.GetForBookingWithSenderNames`
+  (JOINs). Never add per-row lookups (`FindById`/`GetByOwner` inside a loop) to a
+  view: tests assert single round trips via `Database.ConnectionsOpened`. Measured
+  owner dashboard 11.0 s -> 1.2 s, accept 14.3 s -> 1.2 s after this change. The
+  dashboards' `BookingStatusChanged` listeners reload after status changes and are
+  detached on `Unloaded` (they used to leak one per login). Queries still run on
+  the UI thread.
 - **2-tier security:** every copy of the app holds the database credential in plain
   text and talks to the database directly, so authorisation rules (owner-only
   cancel, chat per booking, …) are enforced only in the client; anyone with the

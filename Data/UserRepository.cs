@@ -161,6 +161,69 @@ WHERE Id = @id;";
             return users;
         }
 
+        /// <summary>
+        /// The columns safe to load when a user is JOINed into another query
+        /// (e.g. a booking's owner and sitter): everything except the password
+        /// hash and salt, which no screen needs about another person.
+        /// </summary>
+        internal static readonly string[] PublicColumns =
+            { "Id", "Email", "Role", "FullName", "Phone", "Location", "ProfileImagePath", "CreatedUtc" };
+
+        /// <summary>
+        /// Every sitter with their profile (null if not filled in yet), ordered
+        /// by name, in ONE query. The Find Sitters list used to load the
+        /// profiles one sitter at a time (1 + N round trips).
+        /// </summary>
+        public List<SitterListing> GetSittersWithProfiles()
+        {
+            var listings = new List<SitterListing>();
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText =
+                    "SELECT " + DbCommandExtensions.AliasedColumns("u", "u_", PublicColumns) + ", " +
+                    DbCommandExtensions.AliasedColumns("sp", "sp_", SitterProfileRepository.Columns) +
+                    " FROM Users u LEFT JOIN SitterProfiles sp ON sp.UserId = u.Id" +
+                    " WHERE u.Role = @role" +
+                    " ORDER BY " + _db.Dialect.OrderByIgnoringCase("u.FullName") + ", u.Id;";
+                command.AddParameter("@role", (int)UserRole.Sitter);
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                        listings.Add(new SitterListing
+                        {
+                            Sitter = MapJoined(reader, "u_"),
+                            Profile = SitterProfileRepository.MapJoined(reader, "sp_"),
+                        });
+                }
+            }
+            return listings;
+        }
+
+        /// <summary>
+        /// Maps a user whose <see cref="PublicColumns"/> were selected with
+        /// <paramref name="prefix"/>; null if the LEFT JOIN found no user.
+        /// PasswordHash/PasswordSalt stay null.
+        /// </summary>
+        internal static User MapJoined(DbDataReader reader, string prefix)
+        {
+            if (reader.IsMissing(prefix + "Id"))
+                return null;
+
+            return new User
+            {
+                Id = Convert.ToInt32(reader[prefix + "Id"]),
+                Email = reader[prefix + "Email"] as string,
+                Role = (UserRole)Convert.ToInt32(reader[prefix + "Role"]),
+                FullName = reader[prefix + "FullName"] as string,
+                Phone = reader[prefix + "Phone"] as string,
+                Location = reader[prefix + "Location"] as string,
+                CreatedUtc = DateTime.Parse((string)reader[prefix + "CreatedUtc"], CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind),
+                ProfileImagePath = reader[prefix + "ProfileImagePath"] as string
+            };
+        }
+
         private static User Map(DbDataReader reader)
         {
             return new User
