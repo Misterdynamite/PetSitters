@@ -55,11 +55,18 @@ namespace PetSitters.Services
             Dictionary<string, string> values = EnvFile.Load(envFilePath);
 
             // Environment variables win over the file, for the keys this app reads.
+            // Windows variable names are case-insensitive, but the dictionary
+            // Environment.GetEnvironmentVariables() returns is not, so copy it into
+            // a case-insensitive one first ("petsitters_db" must work too).
             if (environment != null)
             {
+                var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (DictionaryEntry entry in environment)
+                    env[entry.Key.ToString()] = entry.Value as string;
+
                 foreach (string key in new[] { DatabaseUrlKey, DatabaseModeKey, ConnectTimeoutKey })
                 {
-                    if (environment.Contains(key) && environment[key] is string value && value.Length > 0)
+                    if (env.TryGetValue(key, out string value) && !string.IsNullOrEmpty(value))
                         values[key] = value;
                 }
             }
@@ -101,7 +108,16 @@ namespace PetSitters.Services
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 return new Dictionary<string, string>(StringComparer.Ordinal);
-            return Parse(File.ReadAllLines(path));
+            try
+            {
+                return Parse(File.ReadAllLines(path));
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // Unreadable (locked or no permission): treat as "no settings", so
+                // the app still opens on the local database instead of refusing to start.
+                return new Dictionary<string, string>(StringComparer.Ordinal);
+            }
         }
 
         public static Dictionary<string, string> Parse(IEnumerable<string> lines)

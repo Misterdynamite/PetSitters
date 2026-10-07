@@ -52,8 +52,11 @@ namespace PetSitters.Services
             // Guards: a sitter may only act on their own pending requests.
             if (booking == null)
                 return BookingResult.Fail("That booking request could not be found.");
+            // The sitter's list showed it as pending; if it isn't now, the owner
+            // changed it in the meantime (shared database): say so, and have the
+            // view reload its stale list.
             if (booking.Status != BookingStatus.Pending)
-                return BookingResult.Fail("Only pending requests can be accepted.");
+                return ChangedElsewhere(booking.Status);
 
             // Only *accepted* bookings block: other pending requests for the same
             // dates are just competing offers, and the sitter is free to pick one.
@@ -68,9 +71,77 @@ namespace PetSitters.Services
                     $"({clash.StartDate:d MMM yyyy} – {clash.EndDate:d MMM yyyy}). " +
                     "It has not been accepted and will stay pending.");
 
-            _bookings.UpdateStatus(booking.Id, BookingStatus.Accepted);
+            // Pending -> Accepted only if it's STILL pending: the owner may have
+            // cancelled it from another computer since this sitter's list loaded.
+            if (!_bookings.TryUpdateStatus(booking.Id, BookingStatus.Accepted, BookingStatus.Pending))
+                return ChangedElsewhere(booking.Id);
+
             booking.Status = BookingStatus.Accepted;
             return BookingResult.Ok(booking);
+        }
+
+        /// <summary>
+        /// A sitter declines one of their own pending requests (REQ-PS-03).
+        /// Conditional, like every transition here: refused if it's no longer
+        /// pending (e.g. the owner cancelled it in the meantime).
+        /// </summary>
+        public BookingResult DeclineRequest(int bookingId, int sitterUserId)
+        {
+            Booking booking = _bookings.GetById(bookingId);
+            if (booking == null || booking.SitterUserId != sitterUserId)
+                return BookingResult.Fail("That booking request could not be found.");
+            if (booking.Status != BookingStatus.Pending)
+                return ChangedElsewhere(booking.Status);
+
+            if (!_bookings.TryUpdateStatus(booking.Id, BookingStatus.Declined, BookingStatus.Pending))
+                return ChangedElsewhere(booking.Id);
+
+            booking.Status = BookingStatus.Declined;
+            return BookingResult.Ok(booking);
+        }
+
+        /// <summary>
+        /// A sitter cancels one of their own ACCEPTED bookings (from My Chats).
+        /// Only accepted ones: a pending request is declined instead.
+        /// </summary>
+        public BookingResult CancelAsSitter(int bookingId, int sitterUserId)
+        {
+            Booking booking = _bookings.GetById(bookingId);
+            if (booking == null || booking.SitterUserId != sitterUserId)
+                return BookingResult.Fail("Booking not found, or you are not the sitter for this booking.");
+            // Only accepted bookings are listed under My Chats, so anything else
+            // means the owner changed it in the meantime.
+            if (booking.Status != BookingStatus.Accepted)
+                return ChangedElsewhere(booking.Status);
+
+            if (!_bookings.TryUpdateStatus(booking.Id, BookingStatus.Cancelled, BookingStatus.Accepted))
+                return ChangedElsewhere(booking.Id);
+
+            booking.Status = BookingStatus.Cancelled;
+            return BookingResult.Ok(booking);
+        }
+
+        /// <summary>
+        /// The result when a conditional status change found the booking had
+        /// already moved on, i.e. the other person acted first on another computer.
+        /// </summary>
+        private BookingResult ChangedElsewhere(int bookingId)
+        {
+            // Lost the race in the conditional UPDATE itself: re-read to report the new state.
+            Booking now = _bookings.GetById(bookingId);
+            return Stale(now == null ? "removed" : now.Status.ToString().ToLowerInvariant());
+        }
+
+        private static BookingResult ChangedElsewhere(BookingStatus current)
+        {
+            return Stale(current.ToString().ToLowerInvariant());
+        }
+
+        private static BookingResult Stale(string state)
+        {
+            return BookingResult.Stale(
+                $"This booking was changed before your action was saved (it is now {state}). " +
+                "The lists have been refreshed.");
         }
 
         /// <summary>
@@ -169,11 +240,16 @@ namespace PetSitters.Services
             // Guards: only the booking's owner may cancel, and only a live booking.
             if (booking == null || booking.OwnerUserId != ownerUserId)
                 return BookingResult.Fail("That booking could not be found.");
+            // The owner's list showed it as live; if it isn't now, the sitter
+            // declined it in the meantime (or it was already cancelled elsewhere).
             if (!booking.IsActive)
-                return BookingResult.Fail(
-                    $"This booking is already {booking.Status.ToString().ToLowerInvariant()} and cannot be cancelled.");
+                return ChangedElsewhere(booking.Status);
 
-            _bookings.UpdateStatus(booking.Id, BookingStatus.Cancelled);
+            // Only if still pending or accepted: the sitter may have declined it
+            // (or accepted it) from another computer since this list loaded.
+            if (!_bookings.TryUpdateStatus(booking.Id, BookingStatus.Cancelled, BookingStatus.Pending, BookingStatus.Accepted))
+                return ChangedElsewhere(booking.Id);
+
             booking.Status = BookingStatus.Cancelled;
             return BookingResult.Ok(booking);
         }
@@ -186,6 +262,12 @@ namespace PetSitters.Services
         public string ErrorMessage { get; private set; }
         public Booking Booking { get; private set; }
 
+        /// <summary>
+        /// Failed because someone else changed the booking first (shared database).
+        /// The screen's lists are out of date, so the view should reload them.
+        /// </summary>
+        public bool ChangedElsewhere { get; private set; }
+
         public static BookingResult Ok(Booking booking)
         {
             return new BookingResult { Success = true, Booking = booking };
@@ -194,6 +276,11 @@ namespace PetSitters.Services
         public static BookingResult Fail(string message)
         {
             return new BookingResult { Success = false, ErrorMessage = message };
+        }
+
+        public static BookingResult Stale(string message)
+        {
+            return new BookingResult { Success = false, ErrorMessage = message, ChangedElsewhere = true };
         }
     }
 }

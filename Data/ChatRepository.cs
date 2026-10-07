@@ -46,7 +46,7 @@ VALUES (@booking, @sender, @text, @created);
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM ChatMessages WHERE BookingId = @booking ORDER BY CreatedUtc ASC;";
+                command.CommandText = "SELECT * FROM ChatMessages WHERE BookingId = @booking ORDER BY CreatedUtc ASC, Id ASC;";   // Id breaks timestamp ties the same way on both engines
                 command.AddParameter("@booking", bookingId);
                 using (var reader = command.ExecuteReader())
                 {

@@ -265,10 +265,10 @@ engine-specific fragments come from `Database.Dialect` (§5.3).
 
 | Repository | Key methods |
 |------------|-------------|
-| `UserRepository` | `EmailExists` (any role / per role), `Insert`, `UpdateDetails`, `FindByEmail`, `FindAllByEmail`, `FindById`, `GetByRole`, `GetSittersWithProfiles` (one JOIN, §5.8) |
+| `UserRepository` | `EmailExists` (any role / per role), `Insert`, `UpdateDetails` (name, phone, location only), `UpdateProfileImage`, `FindByEmail`, `FindAllByEmail`, `FindById`, `GetByRole`, `GetSittersWithProfiles` (one JOIN, §5.8) |
 | `PetRepository` | `Insert`, `Delete`, `GetByOwner` |
 | `SitterProfileRepository` | `GetByUserId`, `Upsert` (insert-or-update, 1:1) |
-| `BookingRepository` | `Insert`, `UpdateStatus`, `GetForOwner`, `GetForSitter`, `GetById`, `GetDetailsForOwner` / `GetDetailsForSitter` (booking + owner + sitter + pet in one JOIN, §5.8) |
+| `BookingRepository` | `Insert`, `UpdateStatus`, `TryUpdateStatus` (conditional, §5.6), `GetForOwner`, `GetForSitter`, `GetById`, `GetDetailsForOwner` / `GetDetailsForSitter` (booking + owner + sitter + pet in one JOIN, §5.8) |
 | `ChatRepository` | `Insert`, `GetForBooking` (chronological, per-booking scoped), `GetForBookingWithSenderNames` (with sender names, one JOIN, §5.8) |
 
 ---
@@ -319,8 +319,15 @@ wording plus an error code where one exists (e.g. "the server couldn't be
 reached (offline, blocked, or timed out)", or "MySQL error 1064 (ParseError)").
 It **never** shows the host name, URL, user name or password: raw driver
 messages are not displayed because they can name the server and the user, and
-the text is also run through `DatabaseSelector.Redact` (URL and password, raw
-and percent-decoded) in case a future message echoes them. On a fallback the
+every reason is fixed text (`DatabaseSelector.DescribeFailure`), so there is
+nothing to redact. *Reversed:* an earlier version also ran the text through a
+`Redact` step that blanked the URL and password; review found that blanking
+every substring equal to the password could itself reveal a short password
+inside the fixed wording, and with fixed wording it protected nothing, so it
+was removed. A failed TLS handshake is looked for first, because the driver
+wraps it as "unable to connect": the tooltip then says the secure connection
+failed and points at `ssl-mode` / `ssl-ca` instead of claiming the app was
+offline. On a fallback the
 login screen also shows an amber notice: cloud accounts won't work here and
 nothing created will be shared. **Restart the app to try the cloud database
 again.**
@@ -338,19 +345,22 @@ Settings are read once at launch by `Services/AppConfig.cs`.
 
 | Key | Values | Default | Effect |
 |-----|--------|---------|--------|
-| `DATABASE_URL` | `mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-mode=REQUIRED` | unset | The cloud database. Unset or blank = local database only. Port defaults to 3306; percent-encode special characters in the password (`@` → `%40`, `:` → `%3A`, `#` → `%23`). `ssl-mode`: `REQUIRED` (default), `VERIFY_CA`, `VERIFY_IDENTITY`, `PREFERRED`, `DISABLED`. |
+| `DATABASE_URL` | `mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-mode=REQUIRED` | unset | The cloud database. Unset or blank = local database only. Port defaults to 3306; percent-encode special characters in the password (`@` → `%40`, `:` → `%3A`, `#` → `%23`). `ssl-mode`: `REQUIRED` (default), `VERIFY_CA`, `VERIFY_IDENTITY`, `PREFERRED`, `DISABLED`. Optional `ssl-ca=C:\path\ca-certificate.crt`: the server's CA certificate, for `VERIFY_CA` / `VERIFY_IDENTITY` when Windows doesn't already trust it. |
 | `PETSITTERS_DB` | `auto`, `sqlite` (alias `local`) | `auto` | `sqlite` always uses the local database and skips MySQL entirely. Any other value, including a typo, means `auto`. |
 | `DB_CONNECT_TIMEOUT_SECONDS` | 1–60 | 8 | How long the launch-time connection may take before falling back. Out of range or not a number = 8. |
 
 **Precedence:** a real environment variable (when non-empty) overrides the
 `.env` file, which overrides the defaults. This is how the UI tests, CI or a
-shell can force the local database without editing any file.
+shell can force the local database without editing any file. Variable names
+are matched case-insensitively, as Windows does (`petsitters_db` works too).
 
 **`.env` format:** `KEY=value` lines; blank lines and `#` comments are ignored;
 an optional leading `export ` is allowed; the value may be wrapped in single or
 double quotes; everything after the first `=` is the value (URLs and passwords
 may contain `=`); a line that isn't `KEY=value` is skipped rather than failing
-the launch. A missing `.env` simply means no settings (local database only).
+the launch. A missing `.env` simply means no settings (local database only), and
+so does one that can't be read (locked, or no permission): the app still opens
+on the local database rather than refusing to start.
 
 **How `.env` reaches the app:** the app reads `.env` from **its own folder**
 (beside `PetSitters.exe`). `PetSitters.csproj` copies the repo-root `.env` there
@@ -366,10 +376,14 @@ build may fail trying to copy a file that no longer exists (inferred from how
 the condition is evaluated; not tested).
 
 **Keeping the secret out of the repository** (the GitHub repository is public):
-- `.gitignore` excludes `.env` and `.env.*`, except `.env.example`, which is
+- `.gitignore` excludes `.env*` and `*.env` (so copies and backups such as
+  `.env - Copy`, `.env-old` or `prod.env` too), except `.env.example`, which is
   committed with placeholders only and documents every key.
-- CI **Gate 0 "No secrets committed"** fails the build if any `.env` or `.env.*`
-  file other than `.env.example` is tracked (see `docs/CI.md`).
+- CI **Gate 0 "No secrets committed"** fails the build if any such file other
+  than `.env.example` is tracked, **or** if any tracked file contains a
+  `mysql://user:password@host` URL whose host isn't a placeholder (`HOST`,
+  `localhost`, `*.example.com`, `*.test`), so a URL pasted into code or docs is
+  caught too (see `docs/CI.md`).
 - CI never connects to MySQL: the checkout has no `.env`, no secret is
   configured, and the `MySql` test category is excluded. **Do not** add the
   production `DATABASE_URL` as a repository secret: the repository, its workflow
@@ -429,8 +443,8 @@ measurement against the cloud server:
 | `ConnectionTimeout` | `DB_CONNECT_TIMEOUT_SECONDS` (default 8 s) | A new TLS connection measured about **1.2–1.9 s**, so 8 s leaves headroom without making an offline launch wait too long. |
 | `DefaultCommandTimeout` | 10 s | Queries run on the UI thread, so a stalled one must give up well before the driver's 30 s default. |
 | `MaximumPoolSize` | 5 | The server's connection limit is small and shared with other services on the same server, so each running copy of the app stays a small client. |
-| `MinimumPoolSize` | 1 | Keeps one connection open and warm: without it, the first click after a pause would pay the 1.2–1.9 s TLS handshake. |
-| `ConnectionIdleTimeout` | 600 s | Idle connections above the minimum are closed after 10 minutes. |
+| `MinimumPoolSize` | 0 | No connection is kept open forever. *Reversed:* it was 1, to keep one connection warm and spare the first click after a pause the 1.2–1.9 s TLS handshake. Review found that, with `ConnectionReset` off, the pool hands that connection out without checking it is still alive, so after the laptop slept, the Wi-Fi changed or the server timed it out, the next click failed. A long pause now costs one new handshake instead. |
+| `ConnectionIdleTimeout` | 180 s | Idle pooled connections are closed after 3 minutes (was 600 s), so a connection that has sat long enough to go stale is rarely reused. |
 | `ConnectionReset` | `false` | **Measured:** 392 ms per pooled open + query with the reset, 195 ms without, so skipping it halves the cost of every database call. Safe because the app sets no session state (variables, temporary tables, open transactions) that a reset would need to clear. |
 | `Keepalive` | 60 s | TCP keepalive, so home routers don't silently drop the idle pooled connection. |
 | `CharacterSet` | `utf8mb4` | Matches the table character set. |
@@ -439,10 +453,11 @@ measurement against the cloud server:
 
 | When | What happens |
 |------|--------------|
-| **At launch, the cloud database fails** | Always falls back to the local database (§5.1). `DatabaseSelector.IsConnectivityFailure` decides the label: a bad URL (`FormatException`), socket, timeout, TLS (`AuthenticationException`) or I/O error, or a MySQL "unable to connect", "access denied" or "unknown database" error means **Offline**; anything else means **Cloud database error**. |
+| **At launch, the cloud database fails** | Always falls back to the local database (§5.1), and the connection pool is cleared so no half-open cloud session lingers. `DatabaseSelector.IsConnectivityFailure` decides the label: a bad URL (`FormatException`), socket, timeout, TLS (`AuthenticationException`) or I/O error, or a MySQL connection-level error (unable to connect, access denied, unknown database, too many connections, host not allowed, command timeout or interrupted query) means **Offline**; anything else means **Cloud database error**. |
 | **At launch, the local database can't be opened either** (e.g. `%AppData%` not writable) | Nothing is left to fall back to: a message box says the local database couldn't be opened (exception type name only) and the app exits with code 1. |
-| **Mid-session, a database call throws** | `App.DispatcherUnhandledException` turns any exception whose chain contains a `DbException`, `SocketException` or `TimeoutException` into a message instead of a crash, and the app keeps running. Two kinds: connectivity or transient failures (`IsConnectivityFailure`, or MySqlConnector's `IsTransient`) say the app **"couldn't reach its database"** and the last action may not have been saved (on the cloud database: check the connection, and restart to fall back to local if it stays down); data or schema errors say **"The database couldn't save this change"** and give a code to report, e.g. `MySQL 1406 (DataTooLong)` or `SQLite Constraint`. Exception text is never shown, because it can include server and user names. Non-database exceptions are left alone, as before. |
-| **On exit** | When on the cloud database, `MySqlConnection.ClearAllPools()` closes the pooled connections politely (a protocol "quit" per session), so the shared server doesn't log an aborted connection every time someone closes the app. |
+| **Mid-session, a database call throws** | `App.DispatcherUnhandledException` turns any exception whose chain contains a `DbException`, `SocketException` or `TimeoutException` into a message instead of a crash, and the app keeps running. Two kinds: connectivity or transient failures (`IsConnectivityFailure`, or MySqlConnector's `IsTransient`) say the app **"couldn't reach its database"** and the last action may not have been saved (on the cloud database: check the connection, and restart to fall back to local if it stays down), and clear the connection pool so the retry gets a fresh connection rather than the dead one; data or schema errors say **"The database couldn't complete that action"** and give a code to report, e.g. `MySQL 1406 (DataTooLong)` or `SQLite Constraint`. Exception text is never shown, because it can include server and user names. Non-database exceptions are left alone, as before. |
+| **Signing in, the dashboard fails to load** | `MainWindow.OnLoggedIn` undoes the sign-in (`CurrentUser` back to null, header reset) before the error reaches the handler above, so the header never says "Signed in" over the login screen. |
+| **On exit** | `MySqlConnection.ClearAllPools()` closes any pooled connections politely (a protocol "quit" per session), so the shared server doesn't log an aborted connection every time someone closes the app. It runs unconditionally: a cloud attempt may have opened a session even if the app then fell back to local, or the window was closed while still connecting. |
 
 ### 5.6 Security & limitations
 
@@ -468,10 +483,10 @@ accept, and they are stated here rather than hidden.
 3. **TLS encrypts, but by default doesn't verify the server.** `ssl-mode=REQUIRED`
    refuses an unencrypted connection but doesn't check the server's
    certificate, so someone able to intercept the network path could
-   impersonate the server. `VERIFY_CA` / `VERIFY_IDENTITY` check it, but (inferred
-   from the driver's documented behaviour, not yet tried against the cloud
-   server) need the server's CA certificate to be trusted on each PC, because
-   `DATABASE_URL` has no option for a CA file yet.
+   impersonate the server. `VERIFY_CA` / `VERIFY_IDENTITY` check it; they need
+   the server's CA certificate, either trusted by Windows or named with
+   `ssl-ca=` in `DATABASE_URL` (§5.2). Not yet tried against the cloud server:
+   the URL option is unit-tested only (it reaches the driver's `SslCa` setting).
 
 **Recommended mitigations** (configuration only, no code changes):
 - A **dedicated database** for this app and a **least-privilege user** with only
@@ -482,11 +497,65 @@ accept, and they are stated here rather than hidden.
   **trusted sources** (allow-list) setting.
 - **Rotate the password** after the assignment is marked, and whenever a `.env`
   may have leaked.
-- Use **`ssl-mode=VERIFY_CA`** once the CA certificate is trusted on the PCs that
-  run the app.
+- Use **`ssl-mode=VERIFY_CA`** with the provider's CA certificate
+  (`&ssl-ca=C:\path\ca-certificate.crt`), once tried against the server.
 - The structural fix is a 3-tier design (a small web API that holds the
   credential and enforces authorisation on the server, with the desktop app as
   its client). It was not attempted for this prototype.
+
+**Shared-database safeguards** (because two people, or two PCs, now act on the
+same rows):
+- **Status changes are conditional.** Every booking transition goes through
+  `BookingService` and `BookingRepository.TryUpdateStatus`, a single
+  `UPDATE ... WHERE Id = @id AND Status IN (expected)`. If the other person acted
+  first (the owner cancelled while the sitter was reading the request), the
+  update changes nothing, the user is told "This booking was changed before your
+  action was saved (it is now cancelled). The lists have been refreshed.", and
+  the stale list is reloaded (`BookingResult.ChangedElsewhere`). The same result
+  comes back when the service's own guard reads the booking and finds it has
+  already moved on, which is the common case: on a stale screen the guard, not
+  the conditional UPDATE, is usually what notices. Accept, decline, owner cancel
+  and sitter cancel all work this way; decline and the sitter's cancel used to
+  write the status unconditionally from the view.
+- **Simultaneous duplicate sign-ups.** Two PCs registering the same email and
+  role at the same moment can both pass `EmailExists`; the database's
+  `UNIQUE (Email, Role)` key then refuses the second, and `AuthService` turns that
+  (`Database.IsUniqueViolation`) into the normal "account already exists"
+  message instead of an error.
+- **Booking dates are stored without a time-zone offset.** A Local-kind date
+  (the form's default) used to be written as "...+13:00"; read on a PC in
+  another time zone it moved to a different day, shifting the dates shown and the
+  overlap checks. Bookings are now written as offset-free calendar values.
+  Existing rows that still carry an offset are read by ignoring it and keeping
+  the clock value as written (`BookingRepository.ParseCalendarDate`), so every PC
+  sees the date the user picked.
+- **Image paths from the database are only trusted inside this PC's image
+  folder** (`Data/LocalImages.TrustedPathOrNull`, applied when users and pets are
+  read). Anyone with the database credential could otherwise plant a path to a
+  network share (\\server\share\x.png: merely displaying it makes Windows try
+  to sign in to that server, leaking the viewer's Windows login hash) or to any
+  file on the viewer's PC, which "Delete pet" would delete. The check compares
+  the text only: the path must be the folder, one `\`, then a plain file name
+  (no `/`, `..`, device names like `CON`, `:` alternate streams, or trailing dots
+  or spaces). It deliberately never calls `Path.GetFullPath`, because resolving a
+  path can itself touch the network, and comparing text also works when
+  `%AppData%` is redirected to a network folder.
+- **Daily rates must fit the money column**: 0 to 99,999,999.99 with at most two
+  decimal places (`ValidationHelper.TryParseRate`), so the server's STRICT mode
+  never rejects one and both engines store the same value.
+- **A failed save doesn't change the session.** The details and profile-picture
+  saves update a copy of the signed-in user and copy it back only after the
+  database accepts it (`User.Clone` / `CopyDetailsFrom`). The two saves also
+  write separate columns: `UpdateDetails` writes only name, phone and location,
+  and `UpdateProfileImage` only the picture, so saving details on one PC can't
+  put back an old picture path that was changed on another.
+- **Pet list in the booking form is re-read** each time a sitter is picked, so
+  pets added or deleted from the same account on another PC appear (or vanish)
+  without signing out.
+- Not covered: two people accepting overlapping bookings for the same sitter at
+  the same instant can still both pass the REQ-GR-08 check (it reads, then
+  writes). It needs the same sitter signed in on two PCs at once; a database
+  lock or a server-side rule would close it.
 
 **Functional limitations**
 - **No sync, and no migration.** The choice is made once per launch. Anything
@@ -501,6 +570,9 @@ accept, and they are stated here rather than hidden.
   `%AppData%\PetSitters\UserImages` on the uploading PC and only that path is
   stored, so on the cloud database other PCs don't see them: the "pet images on
   the sitter side" feature only works when owner and sitter use the same PC.
+  (Paths that don't point into this PC's own image folder read back as "no
+  image": see the safeguards above.) Storing the pictures in the database is the
+  fix; it was not attempted here.
 - **Latency.** Each query to the cloud server costs about **195 ms** (measured,
   pooled), and queries run on the UI thread, so every click that touches the
   database pauses for its round trips. Lists are loaded with one query each (see
@@ -513,16 +585,20 @@ accept, and they are stated here rather than hidden.
 
 - **`DatabaseConfigurationTests`**: `.env` parsing, environment-over-file
   precedence, `PETSITTERS_DB` modes, timeout bounds, URL parsing (percent-encoding,
-  default port, every `ssl-mode`), and a Security test that a malformed URL
-  fails **without** the password in the error.
+  default port, every `ssl-mode`, `ssl-ca`), case-insensitive variable names, and
+  a Security test that a malformed URL fails **without** the password in the
+  error.
 - **`DatabaseSelectorTests`**: cloud reachable; a real refused connection falls
   back as Offline; an error after connecting is reported as an error, not
-  Offline; the password and URL never appear in the tooltip; malformed URL;
-  forced local; no URL; connectivity classification; `Redact`.
+  Offline; a failed TLS handshake counts as can't-connect (its tooltip wording
+  is not asserted); the password and URL never appear in
+  the tooltip; malformed URL; forced local; no URL; connectivity classification.
+- **`LocalImagesTests`**: the image-path guard (network shares, other folders,
+  `..`, device names, alternate streams, trailing dots, mixed separators).
 - **MySQL parity (`MySqlParityTests.cs`)**: nine `*_MySql` test classes inherit
   **every** test of the SQLite repository and service classes and swap only the
-  database (`DatabaseTestBase.CreateDatabase()` is virtual). 95 executed cases,
-  all passed against the real cloud server (about 6 minutes). Strictly opt-in;
+  database (`DatabaseTestBase.CreateDatabase()` is virtual). Executed-case count
+  and last result are in `docs/CI.md` → "MySQL parity tests". Strictly opt-in;
   each run uses its own throwaway database and never touches the app's (§8).
 - **UI tests**: `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo`
   (an unreachable `DATABASE_URL` opens on the local database, says so in the
@@ -548,17 +624,24 @@ plus its owner, sitter and pet; `GetSittersWithProfiles` returns
 Joined tables' columns are aliased with a prefix (`o_`, `s_`, `p_`, `u_`, `sp_`)
 so one row maps to several objects, and joined users never include password
 hashes. The views build their lists from these, derive the Chats tab from the
-same result as the bookings, check chat participation with a single
-`GetById`, and reuse the owner's already-loaded pet list for the booking form.
-`BookingService.AcceptRequest` uses one query for both its guard and its
-overlap check.
+same result as the bookings, and check chat participation with a single
+`GetById`. `BookingService.AcceptRequest` uses one query for both its guard and
+its overlap check.
 
 **A listener leak, also fixed.** Each dashboard subscribed to
 `BookingRepository.BookingStatusChanged` and never unsubscribed, so every past
 login's dashboard kept reloading its lists (for the current user) on every
-status change: the more logins in a session, the slower each Accept. The
-handler is now detached on `Unloaded`, and the explicit reloads it duplicated
-after a status change were removed.
+status change: the more logins in a session, the slower each Accept. The first
+fix detached the handler on `Unloaded` and dropped the explicit reloads it
+duplicated. *Reversed:* review found the event-driven reload had a second
+problem: a reload that failed inside the event handler was swallowed, leaving a
+stale list with no error shown. The event also only fires for changes made in
+this copy of the app, which with one signed-in user are always the dashboard's
+own actions, so it never told anyone about the other person's changes anyway.
+The dashboards now **don't subscribe at all**: each action that changes a
+booking reloads its lists explicitly afterwards (and after a
+`ChangedElsewhere` result), so a failed reload reaches the database-error
+message (§5.5). The event itself is still raised by the repository.
 
 **Measured** in the real app with a temporary UI-automation harness, against a
 throwaway database on the cloud server seeded with realistic data, before and
@@ -572,6 +655,12 @@ after the change (same data, same machine, 2026-10-07):
 | Sitter: accept a request (until its chat is open) | 14.3 s | 1.2 s |
 | Owner: select a sitter in Find Sitters | 0.47 s | 0.28 s |
 | Send a chat message | 0.93 s | 0.74 s |
+
+The "After" column was measured before two later review changes:
+`MinimumPoolSize` 1 → 0 with a 180 s idle timeout (§5.4), and explicit reloads
+replacing the status-change listener. Neither adds round trips to these
+actions, but after more than 3 minutes idle, the next click now also pays one
+TLS handshake (about 1.2–1.9 s). Not re-measured (inferred).
 
 The structural cause is guarded by tests: `Database.ConnectionsOpened` counts
 round trips, and repository tests assert each loader is ONE query however many
@@ -697,8 +786,8 @@ is applied only on acceptance.
 | Chat privacy | Messages scoped to a booking; retrieval is per-`BookingId` (enforced by the app, not the database: §5.6) |
 | Referential integrity | Foreign keys with cascade rules on both engines (SQLite `ForeignKeys=True`; MySQL InnoDB constraints) |
 | Encryption in transit | Cloud connections use TLS (`ssl-mode=REQUIRED` by default); the certificate is only verified with `VERIFY_CA` / `VERIFY_IDENTITY` (§5.6) |
-| Database credential never displayed | Header tooltip and error messages use fixed wording plus error codes; `MySqlUrl` errors never echo the URL; `DatabaseSelector.Redact` as a backstop; covered by Security-category tests |
-| Secrets kept out of the public repository | `.env` git-ignored; `.env.example` holds placeholders only; CI Gate 0 fails if any other `.env*` file is tracked (§5.2) |
+| Database credential never displayed | Header tooltip and error messages use fixed wording plus error codes; `MySqlUrl` errors never echo the URL; no raw driver text is ever shown, so nothing needs redacting (§5.1); covered by Security-category tests |
+| Secrets kept out of the public repository | `.env` git-ignored; `.env.example` holds placeholders only; CI Gate 0 fails if any other `.env*` / `*.env` file is tracked, or a real `mysql://user:password@host` URL appears in any tracked file (§5.2) |
 | Availability | Local fallback at launch; database errors mid-session become messages, not crashes (§5.5) |
 | Testability | Logic layer has no WPF dependency; `Database` path is injectable; `DatabaseSelector` takes injectable constructors; `DatabaseTestBase.CreateDatabase()` is virtual, so the MySQL parity classes re-run the suites on MySQL |
 
@@ -739,8 +828,8 @@ dotnet test PetSitters.Tests -c Debug
 # Run on the local database for one session, even with .env present (environment beats .env)
 $env:PETSITTERS_DB = "sqlite"; .\bin\Debug\PetSitters.exe
 
-# MySQL parity tests (opt-in; about 6 minutes over the internet). Either give a server
-# where databases can be created (the database part of the URL is ignored) ...
+# MySQL parity tests (opt-in; about 4–7 minutes over the internet). Either give a server
+# where databases can be created (the URL must name a database, but that name isn't used) ...
 $env:PETSITTERS_TEST_MYSQL_URL = "mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-mode=REQUIRED"
 # ... or reuse the server from DATABASE_URL / the repo-root .env:
 $env:PETSITTERS_TEST_MYSQL = "1"

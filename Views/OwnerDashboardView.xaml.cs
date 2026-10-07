@@ -34,19 +34,18 @@ namespace PetSitters.Views
             LoadSitters();
             LoadBookings();
 
-            // Refresh the lists whenever a booking's status changes (this dashboard's
-            // own cancel, for example). The handler is detached when the dashboard is
-            // removed (logout): without that, every past login's dashboard stayed
-            // subscribed and kept reloading in the background, for the wrong user.
-            _onBookingStatusChanged = (id, status) => Dispatcher.Invoke(LoadBookings);
-            _services.Bookings.BookingStatusChanged += _onBookingStatusChanged;
-            Unloaded += (s, e) => _services.Bookings.BookingStatusChanged -= _onBookingStatusChanged;
+            // Lists are reloaded explicitly after each action that changes a booking.
+            // This dashboard used to subscribe to BookingRepository.BookingStatusChanged
+            // instead. That event only fires for changes made in THIS app, which with
+            // one signed-in user are always this dashboard's own actions; the
+            // subscriptions were never removed (every past login kept reloading, for
+            // the wrong user), and a failed reload inside the event was silently
+            // swallowed, leaving a stale list with no error. Explicit reloads let a
+            // failure reach the app's database-error message.
         }
 
-        private readonly Action<int, BookingStatus> _onBookingStatusChanged;
-
-        // The owner's pets, as last loaded: reused for the booking form's pet
-        // list so picking a sitter doesn't query the database again.
+        // The owner's pets, as last loaded (by LoadPets, or re-read by
+        // RefreshBookingPetCombo each time a sitter is picked).
         private List<Pet> _myPets = new List<Pet>();
 
         private User Me => _services.CurrentUser;
@@ -105,10 +104,14 @@ namespace PetSitters.Views
                 return;
             }
 
-            Me.FullName = NameBox.Text.Trim();
-            Me.Phone = PhoneBox.Text.Trim();
-            Me.Location = LocationBox.Text.Trim();
-            _services.Users.UpdateDetails(Me);
+            // Save a copy first; the session user changes only once the database
+            // has accepted it (see User.Clone).
+            User updated = Me.Clone();
+            updated.FullName = NameBox.Text.Trim();
+            updated.Phone = PhoneBox.Text.Trim();
+            updated.Location = LocationBox.Text.Trim();
+            _services.Users.UpdateDetails(updated);
+            Me.CopyDetailsFrom(updated);
 
             DetailsStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
             DetailsStatus.Text = "Saved.";
@@ -184,8 +187,8 @@ namespace PetSitters.Views
                 string dest = CopyImageToUserFolder(dlg.FileName);
                 if (dest != null)
                 {
+                    _services.Users.UpdateProfileImage(Me.Id, dest);   // the session changes only after the save works
                     Me.ProfileImagePath = dest;
-                    _services.Users.UpdateDetails(Me); // persist path
                     try { ProfileImageBrush.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(dest)); } catch { }
                 }
             }
@@ -231,7 +234,10 @@ namespace PetSitters.Views
                     "Delete pet", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (confirm != MessageBoxResult.Yes) return;
 
-                // Attempt to remove the pet image file from disk if present
+                // Attempt to remove the pet image file from disk if present. Safe with
+                // the shared database because pet.ImagePath is only ever a file inside
+                // this PC's own image folder: anything else reads back as null
+                // (LocalImages.TrustedPathOrNull), so a planted path can't delete other files.
                 try
                 {
                     if (!string.IsNullOrWhiteSpace(pet.ImagePath) && File.Exists(pet.ImagePath))
@@ -292,8 +298,11 @@ namespace PetSitters.Views
         // ---- FR-6: request booking -------------------------------------------------
         private void RefreshBookingPetCombo()
         {
+            // Re-read the pets each time a sitter is picked (one query): the same
+            // account may have added or deleted pets on another PC since this loaded.
+            _myPets = _services.Pets.GetByOwner(Me.Id);
             var pets = new List<Pet> { new Pet { Id = 0, Name = "All my pets" } };
-            pets.AddRange(_myPets);   // cached by LoadPets, which runs after every pet add/delete
+            pets.AddRange(_myPets);
             BookingPetCombo.ItemsSource = pets;
             BookingPetCombo.SelectedIndex = 0;
         }
@@ -397,9 +406,13 @@ namespace PetSitters.Views
             BookingResult result = _services.BookingActions.CancelBooking(row.BookingId, Me.Id);
             if (!result.Success)
             {
+                // The sitter changed it first (shared database): reload the stale list.
+                if (result.ChangedElsewhere)
+                    LoadBookings();
                 CancelStatus.Text = result.ErrorMessage;
                 return;
             }
+            LoadBookings();   // also refreshes the Chats tab, dropping this booking
 
             // A cancelled booking has no chat (REQ-PO-05): close it if it is open.
             if (_activeChatBookingId == row.BookingId)
@@ -408,9 +421,6 @@ namespace PetSitters.Views
                 ChatTab.Visibility = Visibility.Collapsed;
             }
 
-            // No explicit reload: CancelBooking changes the status, which raises
-            // BookingStatusChanged, and the listener above has already reloaded
-            // both lists (reloading again would be a wasted cloud round trip).
             CancelStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
             CancelStatus.Text = $"Booking with {row.SitterName} cancelled.";
         }

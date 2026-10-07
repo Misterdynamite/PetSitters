@@ -65,13 +65,25 @@ namespace PetSitters
         /// <summary>Called after a successful login or registration.</summary>
         public void OnLoggedIn(User user)
         {
-            _services.CurrentUser = user;
+            _services.CurrentUser = user;   // the dashboards read the signed-in user while loading
+            UserControl dashboard;
+            try
+            {
+                dashboard = user.Role == UserRole.Owner
+                    ? (UserControl)new OwnerDashboardView(_services, this)
+                    : new SitterDashboardView(_services, this);
+            }
+            catch
+            {
+                // Loading failed (e.g. the cloud connection dropped). Undo the sign-in
+                // so the header doesn't say "Signed in" over the login screen; the
+                // app's database-error handler then explains what happened.
+                _services.CurrentUser = null;
+                UpdateSessionBar();
+                throw;
+            }
             UpdateSessionBar();
-
-            if (user.Role == UserRole.Owner)
-                Navigate(new OwnerDashboardView(_services, this));
-            else
-                Navigate(new SitterDashboardView(_services, this));
+            Navigate(dashboard);
         }
 
         private void UpdateSessionBar()

@@ -106,6 +106,21 @@ namespace PetSitters.Tests
             finally { File.Delete(path); }
         }
 
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        // Windows environment variable names are case-insensitive, so a lower-case
+        // override (e.g. typed in a shell) must still switch to the local database.
+        public void AppConfig_EnvironmentVariableNames_AreCaseInsensitive()
+        {
+            var environment = new Hashtable { ["petsitters_db"] = "sqlite" };
+
+            AppConfig config = AppConfig.Load(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".env"), environment);
+
+            Assert.IsTrue(config.ForceLocalDatabase);
+        }
+
         [DataTestMethod]
         [TestCategory("Unit")]
         [TestCategory("Positive")]
@@ -178,6 +193,19 @@ namespace PetSitters.Tests
 
             Assert.AreEqual((uint)MySqlUrl.DefaultPort, cs.Port);
             Assert.AreEqual(MySqlSslMode.Required, cs.SslMode, "Without ssl-mode we still insist on encryption.");
+        }
+
+        [TestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Positive")]
+        // For ssl-mode=VERIFY_CA when Windows doesn't already trust the server's CA.
+        public void MySqlUrl_SslCa_IsPassedToTheDriver()
+        {
+            var cs = new MySqlConnectionStringBuilder(MySqlUrl.ToConnectionString(
+                "mysql://u:p@host/db?ssl-mode=VERIFY_CA&ssl-ca=C:%2Fcerts%2Fca.pem"));
+
+            Assert.AreEqual(MySqlSslMode.VerifyCA, cs.SslMode);
+            Assert.AreEqual("C:/certs/ca.pem", cs.SslCa);
         }
 
         [TestMethod]

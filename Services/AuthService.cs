@@ -47,9 +47,7 @@ namespace PetSitters.Services
             // register as a sitter with the same email (and vice versa), but not
             // twice as the same role. Case-insensitive, matching the DB index.
             if (_users.EmailExists(email, role))
-                return AuthResult.Fail(
-                    $"{(role == UserRole.Owner ? "An owner" : "A sitter")} account with that email already exists. " +
-                    "Log in instead, or use a different email.");
+                return AuthResult.Fail(DuplicateAccountMessage(role));
 
             PasswordHasher.CreateHash(password, out string hash, out string salt);
 
@@ -65,8 +63,25 @@ namespace PetSitters.Services
                 CreatedUtc = DateTime.UtcNow
             };
 
-            _users.Insert(user);
+            try
+            {
+                _users.Insert(user);
+            }
+            catch (System.Data.Common.DbException ex) when (Database.IsUniqueViolation(ex))
+            {
+                // Two people registered the same email + role at the same moment
+                // (possible with the shared database): both passed EmailExists, and
+                // the database's UNIQUE (Email, Role) key refused the second. Same
+                // friendly message as the check above, instead of an error dialog.
+                return AuthResult.Fail(DuplicateAccountMessage(role));
+            }
             return AuthResult.Ok(user);
+        }
+
+        private static string DuplicateAccountMessage(UserRole role)
+        {
+            return $"{(role == UserRole.Owner ? "An owner" : "A sitter")} account with that email already exists. " +
+                   "Log in instead, or use a different email.";
         }
 
         /// <summary>

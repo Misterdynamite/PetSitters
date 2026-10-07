@@ -16,7 +16,7 @@ namespace PetSitters.Tests
     /// creates (then drops) a database on a shared server. Visual Studio's "Run
     /// All Tests" ignores command-line filters, so the opt-in has to live here:
     /// 1. <c>PETSITTERS_TEST_MYSQL_URL</c> = a mysql:// URL for a server you can create
-    ///    databases on (its database part is ignored); or
+    ///    databases on (it must name a database, but that name isn't used); or
     /// 2. <c>PETSITTERS_TEST_MYSQL=1</c> = reuse the server from the app's DATABASE_URL
     ///    (environment variable, or the repo-root .env found by walking up from
     ///    the test output folder).
@@ -44,6 +44,8 @@ namespace PetSitters.Tests
         private static string _serverConnectionString;   // no database selected
         private static string _testConnectionString;     // the run's own test database
         private static string _testDatabaseName;
+        private static string _appDatabase;        // never created, emptied or dropped by the tests
+        private static string _setupFailure;       // reported by every test if setup failed
 
         /// <summary>
         /// A <see cref="Database"/> on this run's test database, with every table
@@ -55,6 +57,8 @@ namespace PetSitters.Tests
             EnsureTestDatabase();
             if (_skipReason != null)
                 Assert.Inconclusive(_skipReason);
+            if (_setupFailure != null)
+                Assert.Fail(_setupFailure);   // the real cause, for every test, not just the first
 
             var database = Database.ForMySql(_testConnectionString);
             database.Initialize();   // CREATE TABLE IF NOT EXISTS (first test creates, later ones no-op)
@@ -94,27 +98,47 @@ namespace PetSitters.Tests
                     return;
                 }
 
-                var server = new MySqlConnectionStringBuilder(MySqlUrl.ToConnectionString(url, 15));
-                string appDatabase = string.IsNullOrWhiteSpace(appUrl) ? null
-                    : new MySqlConnectionStringBuilder(MySqlUrl.ToConnectionString(appUrl)).Database;
-
-                string now = DateTime.UtcNow.ToString(TimeFormat, CultureInfo.InvariantCulture);
-                _testDatabaseName = NamePrefix + now + "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
-
-                // Belt and braces: the generated name can never equal the app's
-                // database, but refuse loudly if it somehow did.
-                if (string.Equals(_testDatabaseName, appDatabase, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Refusing to use the app's own database for tests.");
-
-                server.Database = string.Empty;
-                _serverConnectionString = server.ConnectionString;
-                server.Database = _testDatabaseName;
-                _testConnectionString = server.ConnectionString;
-
-                DropStaleTestDatabases();
-                Execute(_serverConnectionString,
-                    "CREATE DATABASE `" + _testDatabaseName + "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_ci;");
+                try
+                {
+                    CreateTestDatabase(url, appUrl);
+                }
+                catch (Exception ex)
+                {
+                    _setupFailure = "MySQL test database setup failed: " + ex.GetType().Name + ": " + ex.Message;
+                }
             }
+        }
+
+        private static void CreateTestDatabase(string url, string appUrl)
+        {
+            var server = new MySqlConnectionStringBuilder(MySqlUrl.ToConnectionString(url, 15));
+            try
+            {
+                _appDatabase = string.IsNullOrWhiteSpace(appUrl) ? null
+                    : new MySqlConnectionStringBuilder(MySqlUrl.ToConnectionString(appUrl)).Database;
+            }
+            catch (FormatException)
+            {
+                _appDatabase = null;   // an unparseable app URL can't name a database to protect
+            }
+            string appDatabase = _appDatabase;
+
+            string now = DateTime.UtcNow.ToString(TimeFormat, CultureInfo.InvariantCulture);
+            _testDatabaseName = NamePrefix + now + "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+            // Belt and braces: the generated name can never equal the app's
+            // database, but refuse loudly if it somehow did.
+            if (string.Equals(_testDatabaseName, appDatabase, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Refusing to use the app's own database for tests.");
+
+            server.Database = string.Empty;
+            _serverConnectionString = server.ConnectionString;
+            server.Database = _testDatabaseName;
+            _testConnectionString = server.ConnectionString;
+
+            DropStaleTestDatabases();
+            Execute(_serverConnectionString,
+                "CREATE DATABASE `" + _testDatabaseName + "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_ci;");
         }
 
         /// <summary>Removes test databases left by crashed runs (only our prefix, only old ones).</summary>
@@ -133,7 +157,8 @@ namespace PetSitters.Tests
                         {
                             string name = reader.GetString(0);
                             string stamp = name.Substring(NamePrefix.Length, Math.Min(TimeFormat.Length, name.Length - NamePrefix.Length));
-                            if (DateTime.TryParseExact(stamp, TimeFormat, CultureInfo.InvariantCulture,
+                            if (!string.Equals(name, _appDatabase, StringComparison.OrdinalIgnoreCase) &&
+                                DateTime.TryParseExact(stamp, TimeFormat, CultureInfo.InvariantCulture,
                                     DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime created) &&
                                 DateTime.UtcNow - created > StaleAfter)
                                 stale.Add(name);

@@ -34,16 +34,11 @@ namespace PetSitters.Views
             LoadProfile();
             LoadRequests();
 
-            // Refresh the lists whenever a booking's status changes (this dashboard's
-            // own accept/decline/cancel). Detached when the dashboard is removed
-            // (logout): without that, every past login's dashboard stayed subscribed
-            // and kept reloading in the background, for the wrong user.
-            _onBookingStatusChanged = (id, status) => Dispatcher.Invoke(LoadRequests);
-            _services.Bookings.BookingStatusChanged += _onBookingStatusChanged;
-            Unloaded += (s, e) => _services.Bookings.BookingStatusChanged -= _onBookingStatusChanged;
+            // Lists are reloaded explicitly after each action that changes a booking
+            // (see the matching note in OwnerDashboardView: the old
+            // BookingStatusChanged subscription leaked one listener per login and
+            // silently swallowed failed reloads).
         }
-
-        private readonly Action<int, BookingStatus> _onBookingStatusChanged;
 
         private void ChatsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -129,10 +124,14 @@ namespace PetSitters.Views
                 return;
             }
 
-            Me.FullName = NameBox.Text.Trim();
-            Me.Phone = PhoneBox.Text.Trim();
-            Me.Location = LocationBox.Text.Trim();
-            _services.Users.UpdateDetails(Me);
+            // Save a copy first; the session user changes only once the database
+            // has accepted it (see User.Clone).
+            User updated = Me.Clone();
+            updated.FullName = NameBox.Text.Trim();
+            updated.Phone = PhoneBox.Text.Trim();
+            updated.Location = LocationBox.Text.Trim();
+            _services.Users.UpdateDetails(updated);
+            Me.CopyDetailsFrom(updated);
 
             DetailsStatus.Foreground = (Brush)FindResource("Brand");
             DetailsStatus.Text = "Saved.";
@@ -146,8 +145,8 @@ namespace PetSitters.Views
                 string dest = CopyImageToUserFolder(dlg.FileName);
                 if (dest != null)
                 {
+                    _services.Users.UpdateProfileImage(Me.Id, dest);   // the session changes only after the save works
                     Me.ProfileImagePath = dest;
-                    _services.Users.UpdateDetails(Me);
                     try { ProfileImageBrushSitter.ImageSource = new System.Windows.Media.Imaging.BitmapImage(new Uri(dest)); } catch { }
                 }
             }
@@ -176,7 +175,7 @@ namespace PetSitters.Views
             }
             if (!ValidationHelper.TryParseRate(RateBox.Text, out decimal rate))
             {
-                ShowProfileError("Daily rate must be a number (0 or more).");
+                ShowProfileError("Daily rate must be a number from 0 to 99,999,999.99, with at most 2 decimal places.");
                 return;
             }
 
@@ -246,26 +245,25 @@ namespace PetSitters.Views
                 return;
             }
 
-            if (status == BookingStatus.Accepted)
+            // Both answers go through BookingService: accepting enforces the
+            // REQ-GR-08 overlap rule, and both are conditional status changes that
+            // refuse if the owner changed the booking first (shared database).
+            BookingResult result = status == BookingStatus.Accepted
+                ? _services.BookingActions.AcceptRequest(row.BookingId, Me.Id)
+                : _services.BookingActions.DeclineRequest(row.BookingId, Me.Id);
+            if (!result.Success)
             {
-                // Accepting goes through BookingService so the REQ-GR-08 overlap
-                // rule is enforced. On rejection, return BEFORE LoadRequests():
-                // it blanks RequestStatus, and the request must stay in the list.
-                BookingResult result = _services.BookingActions.AcceptRequest(row.BookingId, Me.Id);
-                if (!result.Success)
-                {
-                    RequestStatus.Foreground = (Brush)FindResource("Danger");
-                    RequestStatus.Text = result.ErrorMessage;
-                    return;
-                }
-            }
-            else
-            {
-                _services.Bookings.UpdateStatus(row.BookingId, status);
+                // Someone else changed it: this list is stale, so reload it, THEN
+                // show the message (LoadRequests clears RequestStatus). Other
+                // refusals (an overlap) leave the request where it is.
+                if (result.ChangedElsewhere)
+                    LoadRequests();
+                RequestStatus.Foreground = (Brush)FindResource("Danger");
+                RequestStatus.Text = result.ErrorMessage;
+                return;
             }
 
-            // No explicit reload: the status change raised BookingStatusChanged and
-            // the listener has already reloaded the requests and chats.
+            LoadRequests();   // refresh both lists (this clears RequestStatus, so set it after)
             RequestStatus.Foreground = (Brush)FindResource("Brand");
             RequestStatus.Text = $"Request {status.ToString().ToLowerInvariant()}.";
             if (status == BookingStatus.Accepted)
@@ -369,18 +367,20 @@ namespace PetSitters.Views
                 return;
             }
 
-            // Only allow cancelling bookings where the current user is the sitter
-            var booking = FindMyBooking(row.BookingId);
-            if (booking == null || booking.SitterUserId != Me.Id)
-            {
-                MessageBox.Show("Booking not found or you are not the sitter for this booking.");
-                return;
-            }
-
             var confirm = MessageBox.Show("Are you sure you want to cancel this booking?", "Confirm cancel", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (confirm != MessageBoxResult.Yes) return;
 
-            _services.Bookings.UpdateStatus(booking.Id, BookingStatus.Cancelled);
+            // Through BookingService: only this booking's sitter, only while it's
+            // accepted, and refused if the owner changed it first (shared database).
+            BookingResult result = _services.BookingActions.CancelAsSitter(row.BookingId, Me.Id);
+            if (!result.Success)
+            {
+                if (result.ChangedElsewhere)
+                    LoadRequests();
+                MessageBox.Show(result.ErrorMessage);
+                return;
+            }
+            Booking booking = result.Booking;
 
             // If this booking's chat was open, close it
             if (_activeChatBookingId.HasValue && _activeChatBookingId.Value == booking.Id)
@@ -389,8 +389,7 @@ namespace PetSitters.Views
                 ChatTab.Visibility = Visibility.Collapsed;
             }
 
-            // No explicit reload: the status change raised BookingStatusChanged and
-            // the listener has already reloaded the requests and chats.
+            LoadRequests();   // refresh both lists (resets the chat details text, so set it after)
             ChatSelectedDetails.Text = "Booking cancelled.";
         }
 

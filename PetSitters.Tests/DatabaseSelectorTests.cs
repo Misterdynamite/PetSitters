@@ -97,6 +97,7 @@ namespace PetSitters.Tests
         [DataRow("socket", true, DisplayName = "Network error")]
         [DataRow("timeout", true, DisplayName = "Timeout")]
         [DataRow("wrapped-timeout", true, DisplayName = "Timeout wrapped by the driver")]
+        [DataRow("tls", true, DisplayName = "TLS handshake failure")]
         [DataRow("other", false, DisplayName = "Anything else is a real error")]
         public void IsConnectivityFailure_Classification(string kind, bool expected)
         {
@@ -106,6 +107,7 @@ namespace PetSitters.Tests
                 case "format": ex = new FormatException("x"); break;
                 case "socket": ex = new System.Net.Sockets.SocketException(10061); break;
                 case "timeout": ex = new TimeoutException(); break;
+                case "tls": ex = new InvalidOperationException("outer", new System.Security.Authentication.AuthenticationException()); break;
                 case "wrapped-timeout": ex = new InvalidOperationException("outer", new TimeoutException()); break;
                 default: ex = new InvalidOperationException("x"); break;
             }
@@ -173,23 +175,6 @@ namespace PetSitters.Tests
 
             Assert.AreSame(local, selection.Database);
             Assert.IsFalse(selection.FellBack);
-        }
-
-        [DataTestMethod]
-        [TestCategory("Unit")]
-        [TestCategory("Security")]
-        [TestCategory("Positive")]
-        [DataRow("mysql://u:" + Secret + "@h/db", DisplayName = "Plain password")]
-        [DataRow("mysql://u:p%40ss%3Aword@h/db", DisplayName = "Percent-encoded password (raw and decoded forms)")]
-        public void Redact_RemovesUrlAndPassword(string url)
-        {
-            string decodedPassword = Uri.UnescapeDataString(url.Substring(url.IndexOf(':', 6) + 1, url.IndexOf('@') - url.IndexOf(':', 6) - 1));
-            string text = "failed for " + url + " with password " + decodedPassword;
-
-            string redacted = DatabaseSelector.Redact(text, url);
-
-            Assert.IsFalse(redacted.Contains(decodedPassword), redacted);
-            Assert.IsFalse(redacted.Contains(url), redacted);
         }
 
         // ---- helpers ----

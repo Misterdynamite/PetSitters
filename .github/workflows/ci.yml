@@ -2,8 +2,8 @@
 #
 # Every push and pull request to main goes through four quality gates (0-3), in
 # order; a failure at any gate stops the run and marks the commit/PR red:
-#   0. Secrets      - no .env file is tracked (the repo is public; .env holds
-#                     the database password).
+#   0. Secrets      - no .env file (or copy) is tracked and no real mysql:// URL appears in
+#                     any tracked file (the repo is public; .env holds the database password).
 #   1. Build        - the WPF app compiles (Release).
 #   2. Smoke        - the core tests (TestCategory=Smoke, MySql excluded) prove the build is
 #                     basically sane before spending time on the full suite.
@@ -42,11 +42,27 @@ jobs:
       - name: "Gate 0: No secrets committed"
         shell: pwsh
         run: |
-          # .env holds the database password and must never be in git;
-          # .env.example (placeholders only) is the one allowed exception.
-          $tracked = git ls-files -- .env '.env.*' '**/.env' '**/.env.*' | Where-Object { $_ -notmatch '(^|/)\.env\.example$' }
-          if ($tracked) { Write-Error "Secret file(s) tracked in git: $($tracked -join ', ')"; exit 1 }
-          Write-Output "No .env files tracked."
+          # 1. No secrets FILE is tracked: .env and copies/backups (.env*, *.env), except .env.example.
+          $files = git ls-files | Where-Object {
+              $name = Split-Path $_ -Leaf
+              ($name -like '.env*' -or $name -like '*.env') -and $name -ne '.env.example'
+          }
+          if ($files) { Write-Error "Secret file(s) tracked in git: $($files -join ', ')"; exit 1 }
+          
+          # 2. No real database URL pasted into ANY tracked file. A mysql://user:password@host
+          #    is allowed only with a placeholder or made-up host (HOST/host/h, localhost,
+          #    127.0.0.1, *.example.com, *.test), which is all the docs and tests use.
+          $allowedHost = '^(HOST|host|h|localhost|127\.0\.0\.1|([A-Za-z0-9-]+\.)*example\.com|([A-Za-z0-9-]+\.)*test)$'
+          $leaks = @()
+          foreach ($line in (git grep -n -I -E 'mysql://[^:/@[:space:]]+:[^@[:space:]]+@' -- .)) {
+              foreach ($m in [regex]::Matches($line, 'mysql://[^:/@ "]+:[^@ "]+@([A-Za-z0-9.-]+)')) {
+                  if ($m.Groups[1].Value -notmatch $allowedHost) { $leaks += (($line -split ':')[0..1] -join ':') }   # file:line only: CI logs are public
+              }
+          }
+          if ($LASTEXITCODE -gt 1) { Write-Error 'git grep failed'; exit 1 }
+          if ($leaks) { Write-Error ("Possible real database URL(s) in tracked files:`n" + ($leaks -join "`n")); exit 1 }
+          Write-Output "No secret files or real database URLs tracked."
+          exit 0   # explicit: GitHub's pwsh wrapper would otherwise exit with git grep's code (1 = no candidate lines)
 
       # The app is a classic (non-SDK) csproj: it needs Visual Studio's MSBuild,
       # not `dotnet build`. The SDK-style test project uses the .NET SDK.

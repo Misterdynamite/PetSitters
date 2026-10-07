@@ -39,10 +39,10 @@ flowchart LR
 
 | # | Gate | Where | Fails when |
 |---|------|-------|-----------|
-| 0 | **No secrets committed** | CI | A `.env` or `.env.*` file other than `.env.example` is tracked in git. `.env` holds the database password and the repository is public. |
+| 0 | **No secrets committed** | CI | A `.env*` or `*.env` file other than `.env.example` is tracked in git (so copies and backups such as `.env - Copy` or `prod.env` count too), **or** any tracked file contains a `mysql://user:password@host` URL whose host isn't a placeholder (`HOST`, `host`, `h`, `localhost`, `127.0.0.1`, `*.example.com`, `*.test`). `.env` holds the database password and the repository is public. The failure lists only `file:line`, never the matched text, because CI logs are public too. |
 | 1 | **Successful build** | CI + local | The WPF app doesn't compile (Release in CI). |
 | 2 | **Smoke tests**: 12 tests tagged `Smoke` | CI + local build | Any core path is broken: password hashing, reading `.env` and `DATABASE_URL`, choosing the database at launch (cloud when reachable, local fallback when not), register, log in (< 1 s, on SQLite), schema/migration start-up, booking request, accept, chat persistence. |
-| 3 | **Full logic + integration suite**: 245 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 102 MySQL parity cases are excluded (see below). |
+| 3 | **Full logic + integration suite**: 288 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 121 MySQL parity cases are excluded (see below). |
 | 4 | **UI regression suite**: 8 FlaUI tests | Local, before merge | An end-to-end journey breaks (see below for why it isn't in CI). |
 
 Gates run in order and **stop at the first failure**. Smoke runs before the
@@ -52,12 +52,23 @@ smoke time is the cloud-unreachable fallback test, which waits for a real
 refused connection.
 
 **Gate 0 runs only in CI**, before anything is built. Locally, `.gitignore`
-(`.env`, `.env.*`, `!.env.example`) keeps the file out of commits, but
-`git add -f` gets past it. **Gate 0 catches that mistake only after the push**,
+(`.env*`, `*.env`, `!.env.example`) keeps the file out of commits, but
+`git add -f` gets past it, and nothing stops the URL being pasted into a
+source file or a doc. **Gate 0 catches either mistake only after the push**,
 when the password is already in the public history. If it ever fails, rotate
-the database password first, then remove the file: deleting it in a later
-commit doesn't remove it from history. To check before pushing,
-`git ls-files .env ".env.*"` must print nothing except `.env.example`.
+the database password first, then remove the file or line: deleting it in a
+later commit doesn't remove it from history. To check before pushing, run the
+gate's script yourself: copy the `run:` block of the "Gate 0" step in
+`.github/workflows/ci.yml` into PowerShell at the repo root.
+
+The content check was written after review found the file-name check alone
+missed copies (`.env - Copy`) and pasted URLs. It was verified on 2026-10-07:
+the clean repository passes; the real URL planted in a tracked text file fails
+(reported as `leaktest.txt:1`); a tracked copy named `my.env` fails. The first
+version passed vacuously because Windows PowerShell mangled the `"` inside the
+`git grep` pattern; the pattern now uses `[:space:]` classes instead, and the
+script ends with an explicit `exit 0` so GitHub's PowerShell wrapper can't
+turn `git grep`'s "no match" exit code into a failure.
 
 **Evidence that the gate actually gates (2026-10-02):** the minimum password
 length was temporarily changed from 6 to 5. The build ran the tests, two
@@ -97,7 +108,7 @@ it would also write to the database real users share.
 | Linting | Not gated | The app is a classic .NET Framework csproj that `dotnet format` can't analyse. Roslyn analysers could be added later. |
 | Code review | Not enforced by tooling | Two-person team working on `main`. It could be enforced with GitHub branch protection (require a PR, one review, and CI green before merge). That's a repository setting, not code. |
 | Coverage threshold | Not gated | Coverage tooling for .NET Framework 4.7.2 adds setup cost. Requirement coverage is tracked instead through the traceability matrix in `UnitTests.md`. |
-| MySQL integration (parity suite) | Opt-in, local only | Needs credentials for a server where databases can be created, takes about 6 minutes over the internet, and creates and drops a database on a shared server with a small connection limit. Run it by hand before merging a change to `Data/` or the schema ([below](#mysql-parity-tests-opt-in)). Moving it into CI would need a disposable MySQL server, never the production one (see above). |
+| MySQL integration (parity suite) | Opt-in, local only | Needs credentials for a server where databases can be created, takes about 4–7 minutes over the internet, and creates and drops a database on a shared server with a small connection limit. Run it by hand before merging a change to `Data/` or the schema ([below](#mysql-parity-tests-opt-in)). Moving it into CI would need a disposable MySQL server, never the production one (see above). |
 
 ## Smoke / sanity testing
 
@@ -138,11 +149,11 @@ the same behaviour on MySQL. It defines 9 test classes tagged
 `PetRepositoryTests_MySql`, `SitterProfileRepositoryTests_MySql`,
 `SharedEmailTests_MySql`). Each inherits **every** test of the matching SQLite
 class and swaps only the database (`DatabaseTestBase.CreateDatabase()`), giving
-**102 executed cases**. They catch SQL only one engine accepts (the
+**121 executed cases**. They catch SQL only one engine accepts (the
 engine-specific SQL lives in `Data/SqlDialect.cs`), values MySQL's strict mode
 rejects, and collation or ordering differences.
 
-**They are strictly opt-in.** Without one of the variables below, all 102 are
+**They are strictly opt-in.** Without one of the variables below, all 121 are
 reported **Skipped** (Inconclusive), never failed. The opt-in lives in the test
 code rather than in a filter because Visual Studio's *Run All Tests* ignores
 command-line filters.
@@ -163,9 +174,19 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
   test, and drops the database when the run ends. A crashed run's leftover is
   dropped by the next run once it is more than 6 hours old. The unique names let
   two people run the suite at the same time.
-- **It is slow:** about 6 minutes, because every query is a round trip to the
+- **It is slow:** about 4–7 minutes, because every query is a round trip to the
   server.
-- **Last result (2026-10-07): 102/102 passed** against the real cloud MySQL server.
+- **It is exposed to the network.** A connection that stalls fails the test it
+  happens in with a timeout, not a wrong answer. Two runs on 2026-10-07 hit this:
+  one case of 116 timed out (isolated reruns of it passed 32 times, then the full
+  run passed 116/116), and later three consecutive `BookingServiceTests_MySql`
+  cases timed out within the same 45 seconds ("Connect Timeout expired" and a
+  command timeout reading from the socket) while the other 118 passed. **Read a
+  timeout failure as "re-run", and an assertion failure as a real difference
+  between the engines.**
+- **Last result (2026-10-07, after the review fixes): 121/121 passed** against
+  the real cloud MySQL server in 4 m 15 s (the rerun after the 118/121 run above).
+  Afterwards the server held no `sitters4us_test_*` databases.
 
 ## Why the UI suite runs locally, not in CI (alternative workflow)
 
@@ -201,8 +222,8 @@ the start-up choice (REQ-GR-09, proposed):
 |------|---------|
 | Build + smoke + full suite (local gate) | `MSBuild.exe PetSitters.csproj /t:Restore,Build /p:Configuration=Debug` |
 | Build only | add `/p:SkipTests=true` |
-| Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 102 MySQL cases are listed as Skipped unless opted in) |
-| MySQL parity suite (opt-in) | set `PETSITTERS_TEST_MYSQL=1` or `PETSITTERS_TEST_MYSQL_URL`, then `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql` (about 6 min) |
+| Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 121 MySQL cases are listed as Skipped unless opted in) |
+| MySQL parity suite (opt-in) | set `PETSITTERS_TEST_MYSQL=1` or `PETSITTERS_TEST_MYSQL_URL`, then `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql` (about 4–7 min) |
 | UI regression suite | `dotnet test PetSitters.UiTests -c Debug` (interactive desktop; don't touch the mouse) |
 | CI | Automatic on push or PR to `main`; manual via **Actions → CI → Run workflow** |
 

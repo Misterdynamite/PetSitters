@@ -96,6 +96,7 @@
     <Compile Include="Models\BookingDetails.cs" />
     <Compile Include="Data\Database.cs" />
     <Compile Include="Data\DbCommandExtensions.cs" />
+    <Compile Include="Data\LocalImages.cs" />
     <Compile Include="Data\MySqlUrl.cs" />
     <Compile Include="Data\SqlDialect.cs" />
     <Compile Include="Data\UserRepository.cs" />

@@ -242,6 +242,98 @@ namespace PetSitters.Tests
             Assert.AreEqual(2, Db.ConnectionsOpened - before, "Each loader must be a single query.");
         }
 
+        // ---- Shared-database safety ----
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        public void TryUpdateStatus_FromAnExpectedStatus_Changes_AndRaisesTheEvent()
+        {
+            GivenOwnerSitterAndPet();
+            Booking booking = InsertBooking(BookingStatus.Pending);
+            int raised = 0;
+            Services.Bookings.BookingStatusChanged += (id, status) => raised++;
+
+            bool changed = Services.Bookings.TryUpdateStatus(booking.Id, BookingStatus.Accepted, BookingStatus.Pending);
+
+            Assert.IsTrue(changed);
+            Assert.AreEqual(BookingStatus.Accepted, Services.Bookings.GetById(booking.Id).Status);
+            Assert.AreEqual(1, raised, "Listeners must hear about the change.");
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        [TestCategory("ErrorHandling")]
+        // The race guard, at the SQL level: the other person already changed the
+        // booking (here: cancelled it), so a stale "Pending -> Declined" from a
+        // second computer must change NOTHING. One conditional UPDATE, no gap.
+        public void TryUpdateStatus_WhenAlreadyChangedByTheOtherParty_ChangesNothing()
+        {
+            GivenOwnerSitterAndPet();
+            Booking booking = InsertBooking(BookingStatus.Cancelled);
+            int raised = 0;
+            Services.Bookings.BookingStatusChanged += (id, status) => raised++;
+
+            bool changed = Services.Bookings.TryUpdateStatus(booking.Id, BookingStatus.Declined, BookingStatus.Pending);
+
+            Assert.IsFalse(changed);
+            Assert.AreEqual(BookingStatus.Cancelled, Services.Bookings.GetById(booking.Id).Status, "The other party's change must stand.");
+            Assert.AreEqual(0, raised, "Nothing changed, so no event.");
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Boundary")]
+        // Booking dates are calendar values: stored with NO time-zone offset, so a
+        // PC in another time zone reading the shared database sees the same day.
+        public void Insert_StoresBookingDatesWithoutATimeZoneOffset()
+        {
+            GivenOwnerSitterAndPet();
+            DateTime localToday = DateTime.Today;   // Kind = Local, as the booking form produces
+            Booking booking = InsertBooking(BookingStatus.Pending);
+
+            string raw;
+            using (var connection = Db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT StartDate FROM Bookings WHERE Id = " + booking.Id + ";";
+                raw = (string)command.ExecuteScalar();
+            }
+            Booking readBack = Services.Bookings.GetById(booking.Id);
+
+            Assert.IsFalse(raw.Contains("+") || raw.EndsWith("Z"), "Stored with an offset: " + raw);
+            Assert.AreEqual(DateTimeKind.Unspecified, readBack.StartDate.Kind);
+            Assert.AreEqual(localToday, readBack.StartDate, "The same calendar date and time must come back.");
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Boundary")]
+        [TestCategory("Positive")]
+        // Rows written before offset-free storage carry an offset. Read on a PC in
+        // another time zone they used to move to a different day; now the clock
+        // value is taken as written, wherever the app runs.
+        public void GetById_LegacyRowWithAnOffset_ReadsTheDateAsWritten()
+        {
+            GivenOwnerSitterAndPet();
+            Booking booking = InsertBooking(BookingStatus.Pending);
+            using (var connection = Db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                // +14:00 is ahead of every real time zone, so converting it to local
+                // time would land on the previous day anywhere this test runs.
+                command.CommandText = "UPDATE Bookings SET StartDate = '2030-03-10T00:00:00.0000000+14:00' WHERE Id = " + booking.Id + ";";
+                command.ExecuteNonQuery();
+            }
+
+            Booking readBack = Services.Bookings.GetById(booking.Id);
+
+            Assert.AreEqual(new DateTime(2030, 3, 10, 0, 0, 0), readBack.StartDate);
+            Assert.AreEqual(DateTimeKind.Unspecified, readBack.StartDate.Kind);
+        }
+
         // ---- helpers ----
         private void GivenOwnerSitterAndPet()
         {

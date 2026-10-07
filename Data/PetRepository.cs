@@ -54,7 +54,7 @@ VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @image, @notes);
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM Pets WHERE OwnerUserId = @owner ORDER BY " + _db.Dialect.OrderByIgnoringCase("Name") + ";";
+                command.CommandText = "SELECT * FROM Pets WHERE OwnerUserId = @owner ORDER BY " + _db.Dialect.OrderByIgnoringCase("Name") + ", Id;";
                 command.AddParameter("@owner", ownerUserId);
                 using (var reader = command.ExecuteReader())
                 {
@@ -93,7 +93,8 @@ VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @image, @notes);
                 Age = Convert.ToInt32(reader[prefix + "Age"]),
                 AgeMonths = Convert.ToInt32(reader[prefix + "AgeMonths"]),
                 Notes = reader[prefix + "Notes"] as string,
-                ImagePath = reader[prefix + "ImagePath"] as string
+                // Only trusted if it points into this PC's own image folder (see LocalImages).
+                ImagePath = LocalImages.TrustedPathOrNull(reader[prefix + "ImagePath"] as string)
             };
         }
     }

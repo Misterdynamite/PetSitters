@@ -39,10 +39,23 @@ namespace PetSitters.Services
             return !string.IsNullOrWhiteSpace(value);
         }
 
-        /// <summary>Parses a daily rate; must be a number that is zero or greater.</summary>
+        /// <summary>
+        /// Largest daily rate that fits the cloud database's DECIMAL(10,2) money
+        /// column. The server runs in STRICT mode, so anything larger would be
+        /// rejected with an error rather than stored.
+        /// </summary>
+        public const decimal MaxRate = 99999999.99m;
+
+        /// <summary>
+        /// Parses a daily rate: a number from 0 to <see cref="MaxRate"/> with at
+        /// most two decimal places (cents). The two-decimal rule keeps both
+        /// databases identical: MySQL's DECIMAL(10,2) would silently round
+        /// 45.555 to 45.56, while SQLite would keep 45.555.
+        /// </summary>
         public static bool TryParseRate(string text, out decimal rate)
         {
-            return decimal.TryParse(text, out rate) && rate >= 0;
+            return decimal.TryParse(text, out rate) && rate >= 0 && rate <= MaxRate &&
+                   decimal.Round(rate, 2) == rate;
         }
 
         /// <summary>Parses an age/years value; must be a whole number that is zero or greater.</summary>

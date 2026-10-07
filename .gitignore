@@ -401,7 +401,8 @@ FodyWeavers.xsd
 *.sln.iml
 
 # Local runtime secrets (database URL etc.). NEVER commit these; .env.example
-# documents the keys with placeholder values and IS committed.
-.env
-.env.*
+# documents the keys with placeholder values and IS committed. The wide patterns also
+# catch copies and backups (.env - Copy, .env-old, prod.env, ...).
+.env*
+*.env
 !.env.example

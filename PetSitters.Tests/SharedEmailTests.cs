@@ -95,6 +95,25 @@ namespace PetSitters.Tests
 
             Assert.IsNotNull(rejected, "The database must refuse a second account with the same email and role.");
             Assert.AreEqual(1, Services.Users.FindAllByEmail(Email).Count, "No duplicate row may have been written.");
+            // AuthService.Register relies on recognising exactly this error to turn a
+            // simultaneous duplicate sign-up (two PCs, same moment) into the normal message.
+            Assert.IsTrue(PetSitters.Data.Database.IsUniqueViolation(rejected), "Must be recognised as a duplicate-key error.");
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        [TestCategory("ErrorHandling")]
+        // Only duplicate-key errors may be reported as "account already exists":
+        // a different constraint failure (here a foreign key) must not be.
+        public void IsUniqueViolation_OtherConstraintErrors_AreNotDuplicates()
+        {
+            System.Data.Common.DbException error = null;
+            try { Services.Pets.Insert(new Pet { OwnerUserId = 999999, Name = "Orphan", Age = 1 }); }
+            catch (System.Data.Common.DbException ex) { error = ex; }
+
+            Assert.IsNotNull(error, "A pet for a non-existent owner must be refused by the foreign key.");
+            Assert.IsFalse(PetSitters.Data.Database.IsUniqueViolation(error));
         }
 
         // ---- login ----

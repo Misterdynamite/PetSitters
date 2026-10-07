@@ -52,8 +52,9 @@ namespace PetSitters
         /// </summary>
         protected override void OnExit(ExitEventArgs e)
         {
-            if (_services != null && _services.Storage.UsingCloud)
-                MySqlConnector.MySqlConnection.ClearAllPools();
+            // Unconditionally: a cloud attempt may have opened a session even if
+            // the app then fell back to local (or the window closed while connecting).
+            MySqlConnector.MySqlConnection.ClearAllPools();
             base.OnExit(e);
         }
 
@@ -78,6 +79,9 @@ namespace PetSitters
             string message;
             if (DatabaseSelector.IsConnectivityFailure(e.Exception) || IsTransient(e.Exception))
             {
+                // The pool may be holding a dead connection (sleep, Wi-Fi change,
+                // server timeout); drop it so the user's retry gets a fresh one.
+                MySqlConnector.MySqlConnection.ClearAllPools();
                 message = "Sitters4Us couldn't reach its database, so your last action may not have been saved." +
                           (cloud
                               ? "\n\nCheck your internet connection and try again. If it keeps happening, restart the app: " +
@@ -86,9 +90,9 @@ namespace PetSitters
             }
             else
             {
-                message = "The database couldn't save this change, so it wasn't saved.\n\n" +
-                          "Check what you entered and try again. If it keeps happening, report this code: " +
-                          ErrorCode(e.Exception) + ".";
+                message = "The database couldn't complete that action.\n\n" +
+                          "If you were saving something, check what you entered and try again. " +
+                          "If it keeps happening, report this code: " + ErrorCode(e.Exception) + ".";
             }
 
             MessageBox.Show(MainWindow, message, "Database problem", MessageBoxButton.OK, MessageBoxImage.Warning);

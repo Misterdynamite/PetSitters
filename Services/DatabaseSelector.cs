@@ -96,11 +96,14 @@ namespace PetSitters.Services
                 // bad URL) and "connected, but the schema step failed" (a real bug
                 // or a server change) are reported differently, so a database
                 // error isn't silently passed off as being offline.
+                // Close anything the failed attempt left in the pool (a session can
+                // be open if it connected and then failed the schema step).
+                MySqlConnector.MySqlConnection.ClearAllPools();
                 bool connectivity = IsConnectivityFailure(ex);
                 return Local(createLocal(), true,
                     connectivity ? "Offline: local database" : "Cloud database error: local database",
                     (connectivity ? "Couldn't connect to the cloud database: " : "Connected to the cloud database, but couldn't prepare it: ") +
-                    DescribeFailure(ex, config.DatabaseUrl) + ". " +
+                    DescribeFailure(ex) + ". " +
                     "Using the local database instead: changes are saved on this computer only and " +
                     "won't be seen by other users. Restart the app to try the cloud database again.");
             }
@@ -119,10 +122,7 @@ namespace PetSitters.Services
                     current is System.IO.IOException)
                     return true;
 
-                if (current is MySqlConnector.MySqlException mysql &&
-                    (mysql.ErrorCode == MySqlConnector.MySqlErrorCode.UnableToConnectToHost ||
-                     mysql.ErrorCode == MySqlConnector.MySqlErrorCode.AccessDenied ||
-                     mysql.ErrorCode == MySqlConnector.MySqlErrorCode.UnknownDatabase))
+                if (current is MySqlConnector.MySqlException mysql && IsConnectivityCode(mysql.ErrorCode))
                     return true;
             }
             return false;
@@ -134,13 +134,48 @@ namespace PetSitters.Services
         }
 
         /// <summary>
+        /// MySQL error codes that mean "couldn't reach or use the server" rather
+        /// than "the server rejected this SQL": unreachable, login refused, no such
+        /// database, too many connections, host not allowed, or a command that
+        /// timed out / was interrupted.
+        /// </summary>
+        private static bool IsConnectivityCode(MySqlConnector.MySqlErrorCode code)
+        {
+            switch (code)
+            {
+                case MySqlConnector.MySqlErrorCode.UnableToConnectToHost:
+                case MySqlConnector.MySqlErrorCode.AccessDenied:
+                case MySqlConnector.MySqlErrorCode.UnknownDatabase:
+                case MySqlConnector.MySqlErrorCode.ConnectionCountError:
+                case MySqlConnector.MySqlErrorCode.TooManyUserConnections:
+                case MySqlConnector.MySqlErrorCode.HostNotPrivileged:
+                case MySqlConnector.MySqlErrorCode.CommandTimeoutExpired:
+                case MySqlConnector.MySqlErrorCode.QueryInterrupted:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
         /// A short, fixed-wording reason for the tooltip, plus an error code where
         /// one exists. Raw driver messages are NOT shown: they can name the server
-        /// and the database user, which shouldn't end up in screenshots. The text is still run through
-        /// <see cref="Redact"/> in case a future message echoes the URL.
+        /// and the database user, which shouldn't end up in screenshots. Because
+        /// every reason is fixed text (or MySqlUrl's own fixed text), it can never
+        /// contain the URL or password. That is why nothing is "redacted": an
+        /// earlier version did, and blanking any substring equal to the password
+        /// could itself reveal a weak password inside the fixed wording.
         /// </summary>
-        public static string DescribeFailure(Exception ex, string databaseUrl)
+        public static string DescribeFailure(Exception ex)
         {
+            // A failed TLS handshake is wrapped as "unable to connect" by the
+            // driver; look for it first so the reason names the real problem.
+            for (Exception current = ex; current != null; current = current.InnerException)
+            {
+                if (current is System.Security.Authentication.AuthenticationException)
+                    return "the secure (TLS) connection failed: check ssl-mode / ssl-ca in DATABASE_URL";
+            }
+
             string reason = null;
             for (Exception current = ex; current != null && reason == null; current = current.InnerException)
             {
@@ -166,39 +201,9 @@ namespace PetSitters.Services
                         reason = "network error " + socket.SocketErrorCode; break;
                     case TimeoutException _:
                         reason = "the connection timed out"; break;
-                    case System.Security.Authentication.AuthenticationException _:
-                        reason = "the secure (TLS) connection failed"; break;
                 }
             }
-            return Redact(reason ?? ex.GetType().Name, databaseUrl);
-        }
-
-        /// <summary>Replaces the whole URL and its password (raw and decoded) with "***".</summary>
-        public static string Redact(string text, string databaseUrl)
-        {
-            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(databaseUrl))
-                return text;
-
-            text = text.Replace(databaseUrl, "***");
-
-            // Pull the password out of "scheme://user:password@host" without Uri,
-            // which could reject a malformed URL that still contains a secret.
-            int schemeEnd = databaseUrl.IndexOf("://", StringComparison.Ordinal);
-            int at = databaseUrl.LastIndexOf('@');
-            if (schemeEnd >= 0 && at > schemeEnd)
-            {
-                string userInfo = databaseUrl.Substring(schemeEnd + 3, at - schemeEnd - 3);
-                int colon = userInfo.IndexOf(':');
-                if (colon >= 0 && colon < userInfo.Length - 1)
-                {
-                    string password = userInfo.Substring(colon + 1);
-                    text = text.Replace(password, "***");
-                    string decoded = Uri.UnescapeDataString(password);
-                    if (decoded.Length > 0)
-                        text = text.Replace(decoded, "***");
-                }
-            }
-            return text;
+            return reason ?? ex.GetType().Name;
         }
     }
 }

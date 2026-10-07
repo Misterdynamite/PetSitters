@@ -33,5 +33,25 @@ namespace PetSitters.Models
 
         /// <summary>Local path to the profile image copied into the app user images folder.</summary>
         public string ProfileImagePath { get; set; }
+
+        /// <summary>
+        /// A shallow copy. The views edit a copy, save it, and only then update
+        /// the signed-in user, so a save that fails (e.g. the cloud connection
+        /// drops) can't leave unsaved values in the session, where the next
+        /// successful save would quietly write them.
+        /// </summary>
+        public User Clone()
+        {
+            return (User)MemberwiseClone();
+        }
+
+        /// <summary>Copies the editable personal details from <paramref name="source"/> onto this user.</summary>
+        public void CopyDetailsFrom(User source)
+        {
+            FullName = source.FullName;
+            Phone = source.Phone;
+            Location = source.Location;
+            ProfileImagePath = source.ProfileImagePath;
+        }
     }
 }

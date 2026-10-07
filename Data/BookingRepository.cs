@@ -32,8 +32,13 @@ VALUES (@owner, @sitter, @pet, @start, @end, @message, @status, @rate, @created)
                 command.AddParameter("@owner", booking.OwnerUserId);
                 command.AddParameter("@sitter", booking.SitterUserId);
                 command.AddParameter("@pet", (object)booking.PetId ?? DBNull.Value);
-                command.AddParameter("@start", booking.StartDate.ToString("o", CultureInfo.InvariantCulture));
-                command.AddParameter("@end", booking.EndDate.ToString("o", CultureInfo.InvariantCulture));
+                // Booking dates are calendar dates/times, not instants: stored WITHOUT
+                // a time-zone offset. A Local-kind date (DateTime.Today, the form's
+                // default) would otherwise be written as "...+13:00" and, read on a
+                // PC in another time zone from the shared database, land on a
+                // different day, shifting the dates shown and the overlap checks.
+                command.AddParameter("@start", AsCalendarDate(booking.StartDate));
+                command.AddParameter("@end", AsCalendarDate(booking.EndDate));
                 command.AddParameter("@message", (object)booking.Message ?? DBNull.Value);
                 command.AddParameter("@status", (int)booking.Status);
                 command.AddParameter("@rate", booking.DailyRateAtBooking);
@@ -41,6 +46,46 @@ VALUES (@owner, @sitter, @pet, @start, @end, @message, @status, @rate, @created)
                 booking.Id = Convert.ToInt32(command.ExecuteScalar());
                 return booking;
             }
+        }
+
+        /// <summary>
+        /// Changes the status ONLY if it is currently one of
+        /// <paramref name="expectedStatuses"/>, in a single UPDATE. Returns false,
+        /// changing nothing and raising no event, when the booking has moved on:
+        /// with a shared database the other person may have acted first (the
+        /// owner cancelled while the sitter was looking at the request). The
+        /// check and the write being one statement means there is no gap for
+        /// that to slip through. BookingService uses this for every transition.
+        /// </summary>
+        public bool TryUpdateStatus(int bookingId, BookingStatus newStatus, params BookingStatus[] expectedStatuses)
+        {
+            if (expectedStatuses == null || expectedStatuses.Length == 0)
+                throw new ArgumentException("At least one expected status is required.", nameof(expectedStatuses));
+
+            int changed;
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                var placeholders = new List<string>();
+                for (int i = 0; i < expectedStatuses.Length; i++)
+                {
+                    placeholders.Add("@expected" + i);
+                    command.AddParameter("@expected" + i, (int)expectedStatuses[i]);
+                }
+                command.CommandText = "UPDATE Bookings SET Status = @status WHERE Id = @id AND Status IN (" +
+                                      string.Join(", ", placeholders) + ");";
+                command.AddParameter("@status", (int)newStatus);
+                command.AddParameter("@id", bookingId);
+                // Rows matched by the WHERE clause (both engines count the row even
+                // if the value is unchanged), so 0 means "not in an expected state".
+                changed = command.ExecuteNonQuery();
+            }
+
+            if (changed > 0)
+            {
+                try { BookingStatusChanged?.Invoke(bookingId, newStatus); } catch { }
+            }
+            return changed > 0;
         }
 
         public void UpdateStatus(int bookingId, BookingStatus status)
@@ -126,7 +171,7 @@ VALUES (@owner, @sitter, @pet, @start, @end, @message, @status, @rate, @created)
             using (var command = connection.CreateCommand())
             {
                 // Column name is a hard-coded literal (never user input), so this is safe.
-                command.CommandText = "SELECT * FROM Bookings WHERE " + column + " = @userId ORDER BY CreatedUtc DESC;";
+                command.CommandText = "SELECT * FROM Bookings WHERE " + column + " = @userId ORDER BY CreatedUtc DESC, Id DESC;";   // Id breaks timestamp ties the same way on both engines
                 command.AddParameter("@userId", userId);
                 using (var reader = command.ExecuteReader())
                 {
@@ -146,13 +191,32 @@ VALUES (@owner, @sitter, @pet, @start, @end, @message, @status, @rate, @created)
                 OwnerUserId = Convert.ToInt32(reader["OwnerUserId"]),
                 SitterUserId = Convert.ToInt32(reader["SitterUserId"]),
                 PetId = petId == DBNull.Value ? (int?)null : Convert.ToInt32(petId),
-                StartDate = DateTime.Parse((string)reader["StartDate"], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                EndDate = DateTime.Parse((string)reader["EndDate"], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                StartDate = ParseCalendarDate((string)reader["StartDate"]),
+                EndDate = ParseCalendarDate((string)reader["EndDate"]),
                 Message = reader["Message"] as string,
                 Status = (BookingStatus)Convert.ToInt32(reader["Status"]),
                 DailyRateAtBooking = Convert.ToDecimal(reader["DailyRateAtBooking"]),
                 CreatedUtc = DateTime.Parse((string)reader["CreatedUtc"], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
             };
+        }
+
+        /// <summary>
+        /// Reads a booking date as the wall-clock value it was written with.
+        /// Rows from before offset-free storage (older local databases) carry an
+        /// offset such as "+13:00". Parsing those with RoundtripKind would convert
+        /// them into THIS PC's time zone and, elsewhere, onto a different day, so
+        /// the offset is ignored and the clock value kept.
+        /// </summary>
+        private static DateTime ParseCalendarDate(string text)
+        {
+            DateTime clock = DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal).DateTime;
+            return DateTime.SpecifyKind(clock, DateTimeKind.Unspecified);
+        }
+
+        /// <summary>ISO-8601 round-trip text with no offset/"Z": the same wall-clock value everywhere.</summary>
+        private static string AsCalendarDate(DateTime value)
+        {
+            return DateTime.SpecifyKind(value, DateTimeKind.Unspecified).ToString("o", CultureInfo.InvariantCulture);
         }
 
         public Booking GetById(int id)

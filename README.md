@@ -153,7 +153,10 @@ documents every key.
 
    Percent-encode special characters in the password (`@` → `%40`, `:` → `%3A`,
    `#` → `%23`). `ssl-mode=REQUIRED` (the default) encrypts the connection;
-   `VERIFY_CA` also checks the server's certificate.
+   `VERIFY_CA` also checks the server's certificate. If Windows doesn't already
+   trust the server's certificate authority, download the provider's CA
+   certificate and add `&ssl-ca=C:\path\ca-certificate.crt` (not yet tried
+   against our server).
 
 3. **Build** as usual (Visual Studio or the MSBuild commands above). The build
    copies `.env` next to the exe (`bin\Debug\.env` or `bin\Release\.env`), and
@@ -200,9 +203,11 @@ The UI test suite launches the app this way, so it never touches the shared
 cloud database.
 
 > **Security — this repository is public.**
-> - Never commit `.env` (it is in `.gitignore`, and CI fails if one is tracked).
->   Don't force-add it, and don't paste the URL into an issue, a commit message or
->   a GitHub Actions secret.
+> - Never commit `.env` (it is in `.gitignore`, along with copies such as
+>   `.env - Copy`). CI fails if one is tracked, or if a real `mysql://` URL with
+>   a password appears in any tracked file, but only **after** the push, when it
+>   is already public. Don't force-add it, and don't paste the URL into code, a
+>   doc, an issue, a commit message or a GitHub Actions secret.
 > - After a build, `bin\Debug\.env` (or `bin\Release\.env`) holds the password in
 >   plain text. **Never zip or share the repo folder or `bin\` while `.env` is in
 >   it.** (GitHub's *Download ZIP* and `git archive` are safe: they only include
@@ -229,6 +234,12 @@ cloud database.
   `%AppData%\PetSitters\UserImages` on the PC that uploaded them, and only that
   file path is stored. On the cloud database, other PCs see the record but not
   the picture (so pet images on the sitter side only show on the same PC).
+- **Shared-database safeguards.** Booking status changes are conditional (if
+  the other person acted first, you're told and the list refreshes), duplicate
+  sign-ups at the same moment get the normal "already exists" message, booking
+  dates don't shift between time zones, image paths read from the database are
+  only used if they point into this PC's own image folder, and saving your
+  details on one PC doesn't erase a profile picture set on another.
 - **Latency on the cloud database.** Each query takes about 195 ms (measured).
   Every list now loads with ONE query (a JOIN), not one query per row. Measured
   in the real app against the cloud server with realistic data (before -> after):
@@ -242,8 +253,8 @@ cloud database.
   Mitigations: a dedicated database and a least-privilege user (SELECT / INSERT /
   UPDATE / DELETE on that one database only), the host's trusted-sources (IP
   allow-list) setting, rotating the password after the assignment, and
-  `ssl-mode=VERIFY_CA` so the server certificate is checked (`REQUIRED` encrypts
-  but does not verify it).
+  `ssl-mode=VERIFY_CA` (with `ssl-ca=` if needed) so the server certificate is
+  checked (`REQUIRED` encrypts but does not verify it).
 
 ## Notes / possible next steps
 

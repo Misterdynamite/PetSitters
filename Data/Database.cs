@@ -97,6 +97,27 @@ namespace PetSitters.Data
         }
 
         /// <summary>
+        /// True if <paramref name="ex"/> is the database refusing a duplicate
+        /// value for a UNIQUE key (e.g. a second account with the same email and
+        /// role), as opposed to any other database error. Each engine reports it
+        /// differently: MySQL error 1062; SQLite a "UNIQUE constraint failed"
+        /// constraint error.
+        /// </summary>
+        public static bool IsUniqueViolation(DbException ex)
+        {
+            if (ex is MySqlException mysql)
+                return mysql.ErrorCode == MySqlErrorCode.DuplicateKeyEntry;
+            if (ex is SQLiteException sqlite)
+                // Extended result codes (Constraint_Unique) only appear when enabled,
+                // so also accept the plain Constraint code with SQLite's message.
+                return sqlite.ResultCode == SQLiteErrorCode.Constraint_Unique ||
+                       sqlite.ResultCode == SQLiteErrorCode.Constraint_PrimaryKey ||
+                       (((int)sqlite.ResultCode & 0xFF) == (int)SQLiteErrorCode.Constraint &&
+                        sqlite.Message.IndexOf("UNIQUE", StringComparison.OrdinalIgnoreCase) >= 0);
+            return false;
+        }
+
+        /// <summary>
         /// Opens a fresh, already-open connection. Caller disposes it. For MySQL
         /// this normally reuses a pooled connection (see <see cref="MySqlUrl"/>),
         /// so it doesn't repeat the TLS handshake every time.

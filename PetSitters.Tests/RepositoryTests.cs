@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PetSitters.Models;
 
@@ -57,14 +58,16 @@ namespace PetSitters.Tests
         // FR-01
         public void GetByRole_ReturnsOnlyThatRole_OrderedByName()
         {
+            // "ann" (lower case) must still come before "Bob": a case-SENSITIVE
+            // (binary) sort would put "Bob" first, since 'B' < 'a'.
             NewUser("sitter-b@test.com", UserRole.Sitter, "Bob");
-            NewUser("sitter-a@test.com", UserRole.Sitter, "Ann");
+            NewUser("sitter-a@test.com", UserRole.Sitter, "ann");
             NewUser("owner@test.com", UserRole.Owner, "Olivia");
 
             List<User> sitters = Services.Users.GetByRole(UserRole.Sitter);
 
             Assert.AreEqual(2, sitters.Count);
-            Assert.AreEqual("Ann", sitters[0].FullName, "Results should be ordered by name.");
+            Assert.AreEqual("ann", sitters[0].FullName, "Results should be ordered by name, ignoring case.");
             Assert.AreEqual("Bob", sitters[1].FullName);
         }
 
@@ -77,8 +80,8 @@ namespace PetSitters.Tests
         // still listed, with a null profile; owners are not listed.
         public void GetSittersWithProfiles_OneQuery_IncludesSittersWithoutProfiles()
         {
-            User bob = NewUser("sitter-b@test.com", UserRole.Sitter, "bob");
-            NewUser("sitter-a@test.com", UserRole.Sitter, "Ann");
+            User bob = NewUser("sitter-b@test.com", UserRole.Sitter, "Bob");
+            NewUser("sitter-a@test.com", UserRole.Sitter, "ann");   // binary order would put "Bob" first
             NewUser("owner@test.com", UserRole.Owner, "Olivia");
             Services.SitterProfiles.Upsert(new SitterProfile { UserId = bob.Id, DailyRate = 55m, Bio = "Hi" });
 
@@ -87,10 +90,31 @@ namespace PetSitters.Tests
 
             Assert.AreEqual(1, Db.ConnectionsOpened - before, "Must be a single query.");
             Assert.AreEqual(2, listings.Count, "Only sitters are listed.");
-            Assert.AreEqual("Ann", listings[0].Sitter.FullName, "Ordered by name, ignoring case.");
+            Assert.AreEqual("ann", listings[0].Sitter.FullName, "Ordered by name, ignoring case.");
             Assert.IsNull(listings[0].Profile, "A sitter with no profile yet is listed with a null profile.");
             Assert.AreEqual(55m, listings[1].Profile.DailyRate);
             Assert.IsNull(listings[1].Sitter.PasswordHash, "Joined users never carry password hashes.");
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        // Shared database: on another PC the picture path reads back as "no image"
+        // (LocalImages). Saving name/phone/location there must not write that
+        // empty value back and erase the picture set on the first PC.
+        public void UpdateDetails_DoesNotTouchTheProfilePicture()
+        {
+            User user = NewUser("a@test.com", UserRole.Owner, "Alice");
+            string picture = System.IO.Path.Combine(PetSitters.Data.LocalImages.Folder, "me.png");
+            Services.Users.UpdateProfileImage(user.Id, picture);
+
+            user.ProfileImagePath = null;   // as read on a PC where the path isn't trusted
+            user.Phone = "022 999";
+            Services.Users.UpdateDetails(user);
+
+            User stored = Services.Users.FindById(user.Id);
+            Assert.AreEqual("022 999", stored.Phone);
+            Assert.AreEqual(picture, stored.ProfileImagePath, "The picture must survive a details save.");
         }
 
         [TestMethod]
@@ -138,6 +162,34 @@ namespace PetSitters.Tests
             });
         }
 
+        [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        [DataRow(@"\\attacker\share\pic.png", DisplayName = "Network share (would leak the Windows login hash)")]
+        [DataRow(@"C:\Windows\win.ini", DisplayName = "Any other file (Delete pet would delete it)")]
+        // A path read back from the shared database is only trusted inside this
+        // PC's image folder; anything else comes back as "no image".
+        public void ImagePath_OutsideTheLocalImageFolder_ReadsBackAsNull(string plantedPath)
+        {
+            GivenAnOwner();
+            Services.Pets.Insert(new Pet { OwnerUserId = _ownerId, Name = "Rex", Age = 3, ImagePath = plantedPath });
+
+            Assert.IsNull(Services.Pets.GetByOwner(_ownerId).Single().ImagePath);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        public void ImagePath_InsideTheLocalImageFolder_IsKept()
+        {
+            GivenAnOwner();
+            string path = System.IO.Path.Combine(PetSitters.Data.LocalImages.Folder, "abc.png");
+            Services.Pets.Insert(new Pet { OwnerUserId = _ownerId, Name = "Rex", Age = 3, ImagePath = path });
+
+            Assert.AreEqual(path, Services.Pets.GetByOwner(_ownerId).Single().ImagePath);
+        }
+
         [TestMethod]
         [TestCategory("Integration")]
         [TestCategory("Positive")]
@@ -145,13 +197,13 @@ namespace PetSitters.Tests
         {
             GivenAnOwner();
             AddPet("Rex");
-            AddPet("Bella");
+            AddPet("bella");
 
             List<Pet> pets = Services.Pets.GetByOwner(_ownerId);
 
             Assert.AreEqual(2, pets.Count);
-            // Ordered by name: Bella before Rex.
-            Assert.AreEqual("Bella", pets[0].Name);
+            // Ordered by name, ignoring case: "bella" before "Rex" (a binary sort would put "Rex" first).
+            Assert.AreEqual("bella", pets[0].Name);
         }
 
         [TestMethod]

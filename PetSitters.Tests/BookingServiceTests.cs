@@ -324,6 +324,130 @@ namespace PetSitters.Tests
             Assert.IsTrue(Services.BookingActions.RequestBooking(NewRequest(_ownerId, rex, 10, 13)).Success);
         }
 
+        // ---- Decline and sitter cancel go through the service (shared-database safety) ----
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        // REQ-PS-03
+        public void DeclineRequest_Pending_IsDeclined()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+
+            BookingResult result = Services.BookingActions.DeclineRequest(booking.Id, _sitterId);
+
+            Assert.IsTrue(result.Success, result.ErrorMessage);
+            Assert.AreEqual(BookingStatus.Declined, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        // The owner cancelled first (from another computer): the sitter's decline is refused, nothing changes.
+        public void DeclineRequest_AfterTheOwnerCancelled_IsRefused_AndStaysCancelled()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+            Services.BookingActions.CancelBooking(booking.Id, _ownerId);
+
+            BookingResult result = Services.BookingActions.DeclineRequest(booking.Id, _sitterId);
+
+            Assert.IsFalse(result.Success);
+            Assert.IsTrue(result.ChangedElsewhere, "The sitter's list is stale and must be reloaded.");
+            StringAssert.Contains(result.ErrorMessage, "it is now cancelled");
+            Assert.AreEqual(BookingStatus.Cancelled, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        // Same for accepting: the owner cancelled while the sitter's list still showed it as pending.
+        public void AcceptRequest_AfterTheOwnerCancelled_ReportsChangedElsewhere()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+            Services.BookingActions.CancelBooking(booking.Id, _ownerId);
+
+            BookingResult result = Services.BookingActions.AcceptRequest(booking.Id, _sitterId);
+
+            Assert.IsFalse(result.Success);
+            Assert.IsTrue(result.ChangedElsewhere);
+            Assert.AreEqual(BookingStatus.Cancelled, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        // And for the owner: the sitter declined while the owner's list still showed it as pending.
+        public void CancelBooking_AfterTheSitterDeclined_ReportsChangedElsewhere()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+            Services.BookingActions.DeclineRequest(booking.Id, _sitterId);
+
+            BookingResult result = Services.BookingActions.CancelBooking(booking.Id, _ownerId);
+
+            Assert.IsFalse(result.Success);
+            Assert.IsTrue(result.ChangedElsewhere);
+            StringAssert.Contains(result.ErrorMessage, "it is now declined");
+            Assert.AreEqual(BookingStatus.Declined, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Negative")]
+        [TestCategory("Security")]
+        // Not-yours is NOT "changed elsewhere" (no reload hint for someone else's booking).
+        public void DeclineRequest_NotYours_IsAPlainRefusal()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+
+            BookingResult result = Services.BookingActions.DeclineRequest(booking.Id, RegisterOtherSitter());
+
+            Assert.IsFalse(result.Success);
+            Assert.IsFalse(result.ChangedElsewhere);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        public void DeclineRequest_ForAnotherSittersBooking_IsRefused()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+
+            Assert.IsFalse(Services.BookingActions.DeclineRequest(booking.Id, RegisterOtherSitter()).Success);
+            Assert.AreEqual(BookingStatus.Pending, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
+        [DataRow(BookingStatus.Accepted, true, DisplayName = "Accepted: the sitter may cancel")]
+        [DataRow(BookingStatus.Pending, false, DisplayName = "Pending: decline it instead")]
+        [DataRow(BookingStatus.Cancelled, false, DisplayName = "Already cancelled")]
+        public void CancelAsSitter_OnlyFromAccepted(BookingStatus stage, bool allowed)
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+            Services.Bookings.UpdateStatus(booking.Id, stage);
+
+            BookingResult result = Services.BookingActions.CancelAsSitter(booking.Id, _sitterId);
+
+            Assert.AreEqual(allowed, result.Success, result.ErrorMessage);
+            Assert.AreEqual(allowed ? BookingStatus.Cancelled : stage, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        public void CancelAsSitter_ByAnotherSitter_IsRefused()
+        {
+            Booking booking = Request(_ownerId, 10, 13);
+            Services.Bookings.UpdateStatus(booking.Id, BookingStatus.Accepted);
+
+            Assert.IsFalse(Services.BookingActions.CancelAsSitter(booking.Id, RegisterOtherSitter()).Success);
+            Assert.AreEqual(BookingStatus.Accepted, Services.Bookings.GetById(booking.Id).Status);
+        }
+
         // ---- helpers ----
 
         /// <summary>A pending request stored directly (bypassing the service's checks) for arranging state.</summary>

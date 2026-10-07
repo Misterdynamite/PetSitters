@@ -91,7 +91,13 @@ VALUES (@email, @hash, @salt, @role, @name, @phone, @location, @created);
             }
         }
 
-        /// <summary>Updates the editable personal details of an existing user.</summary>
+        /// <summary>
+        /// Updates the editable personal details (name, phone, location) of an
+        /// existing user. Deliberately NOT the profile picture: the path read back
+        /// on another PC is "no image" (see LocalImages), so writing it back here
+        /// would erase the picture the user set on their other computer. Use
+        /// <see cref="UpdateProfileImage"/> for that.
+        /// </summary>
         public void UpdateDetails(User user)
         {
             using (var connection = _db.OpenConnection())
@@ -99,13 +105,25 @@ VALUES (@email, @hash, @salt, @role, @name, @phone, @location, @created);
             {
                 command.CommandText = @"
 UPDATE Users
-SET FullName = @name, Phone = @phone, Location = @location, ProfileImagePath = @image
+SET FullName = @name, Phone = @phone, Location = @location
 WHERE Id = @id;";
                 command.AddParameter("@name", user.FullName);
                 command.AddParameter("@phone", (object)user.Phone ?? DBNull.Value);
                 command.AddParameter("@location", (object)user.Location ?? DBNull.Value);
-                command.AddParameter("@image", (object)user.ProfileImagePath ?? DBNull.Value);
                 command.AddParameter("@id", user.Id);
+                command.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Sets the user's profile picture path (only when they import a new picture).</summary>
+        public void UpdateProfileImage(int userId, string imagePath)
+        {
+            using (var connection = _db.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "UPDATE Users SET ProfileImagePath = @image WHERE Id = @id;";
+                command.AddParameter("@image", (object)imagePath ?? DBNull.Value);
+                command.AddParameter("@id", userId);
                 command.ExecuteNonQuery();
             }
         }
@@ -150,7 +168,7 @@ WHERE Id = @id;";
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM Users WHERE Role = @role ORDER BY " + _db.Dialect.OrderByIgnoringCase("FullName") + ";";
+                command.CommandText = "SELECT * FROM Users WHERE Role = @role ORDER BY " + _db.Dialect.OrderByIgnoringCase("FullName") + ", Id;";
                 command.AddParameter("@role", (int)role);
                 using (var reader = command.ExecuteReader())
                 {
@@ -220,7 +238,7 @@ WHERE Id = @id;";
                 Location = reader[prefix + "Location"] as string,
                 CreatedUtc = DateTime.Parse((string)reader[prefix + "CreatedUtc"], CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind),
-                ProfileImagePath = reader[prefix + "ProfileImagePath"] as string
+                ProfileImagePath = LocalImages.TrustedPathOrNull(reader[prefix + "ProfileImagePath"] as string)
             };
         }
 
@@ -238,7 +256,8 @@ WHERE Id = @id;";
                 Location = reader["Location"] as string,
                 CreatedUtc = DateTime.Parse((string)reader["CreatedUtc"], CultureInfo.InvariantCulture,
                     DateTimeStyles.RoundtripKind),
-                ProfileImagePath = reader["ProfileImagePath"] as string
+                // Only trusted if it points into this PC's own image folder (see LocalImages).
+                ProfileImagePath = LocalImages.TrustedPathOrNull(reader["ProfileImagePath"] as string)
             };
         }
     }

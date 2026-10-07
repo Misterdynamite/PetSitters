@@ -73,6 +73,9 @@ namespace PetSitters.Data
                 Password = Uri.UnescapeDataString(userInfo[1]),
                 Database = database,
                 SslMode = ParseSslMode(query),
+                // Optional CA certificate file, for ssl-mode=VERIFY_CA / VERIFY_IDENTITY
+                // when the server's CA isn't trusted by Windows (e.g. a provider's own CA).
+                SslCa = query.TryGetValue("ssl-ca", out string caFile) ? caFile : string.Empty,
                 ConnectionTimeout = (uint)Math.Max(1, connectTimeoutSeconds),
                 // Queries run on the UI thread, so a stalled query must give up
                 // well before the driver's 30 s default. The longest launch wait
@@ -80,11 +83,15 @@ namespace PetSitters.Data
                 DefaultCommandTimeout = CommandTimeoutSeconds,
                 CharacterSet = "utf8mb4",
                 MaximumPoolSize = MaximumPoolSize,
-                // Keep one connection open and warm: opening a new one costs a
-                // ~1.5 s TLS handshake, so without this the first click after a
-                // pause would be noticeably slow.
-                MinimumPoolSize = 1,
-                ConnectionIdleTimeout = 600,
+                // Idle pooled connections are closed after 3 minutes. Keeping one
+                // open forever (MinimumPoolSize=1) was tried, but with ConnectionReset
+                // off the pool hands out a connection without checking it is still
+                // alive: after the laptop slept, the Wi-Fi changed or the server
+                // timed it out, the next click failed. Now a long pause costs one new
+                // TLS handshake (~1.5 s) instead, and App's error handler clears the
+                // pool after a connection failure so the retry gets a fresh one.
+                MinimumPoolSize = 0,
+                ConnectionIdleTimeout = 180,
                 // Skip the "reset session" round trip on every pooled Open. Measured
                 // on the cloud server: 392 ms per open + query with the reset, 195 ms
                 // without, so it halves the cost of every database call. Safe because

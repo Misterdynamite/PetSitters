@@ -19,7 +19,7 @@ database when one is configured and reachable at launch, and falls back to a loc
 | Project | Kind | Framework | Purpose |
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
-| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (245 cases on SQLite, plus 102 opt-in MySQL parity cases) |
+| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (288 cases on SQLite, plus 121 opt-in MySQL parity cases) |
 | `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (8 tests) |
 
 ## Build, test, run — IMPORTANT tooling notes
@@ -40,8 +40,10 @@ both exclude `TestCategory=MySql`), and a failing test fails the build. Add
 "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" PetSitters.csproj /t:Restore,Build /p:Configuration=Debug
 ```
 
-CI: `.github/workflows/ci.yml` runs a no-secrets check (fails if any `.env` /
-`.env.*` other than `.env.example` is tracked) → build → smoke → full suite on every
+CI: `.github/workflows/ci.yml` runs a no-secrets check (fails if any `.env*` /
+`*.env` file other than `.env.example` is tracked, or any tracked file contains a
+`mysql://user:password@host` URL whose host isn't a placeholder such as `HOST`,
+`localhost`, `*.example.com` or `*.test`) → build → smoke → full suite on every
 push or PR to `main` (windows-latest). CI never connects to MySQL. **Do not add the
 real `DATABASE_URL` as a repository secret** — the repo is public, so logs and
 artifacts are too. The UI suite is not in CI; run it locally before pushing.
@@ -56,7 +58,8 @@ artifacts are too. The UI suite is not in CI; run it locally before pushing.
 3. Run `bin\Debug\PetSitters.exe`.
 
 No `.env` = no settings = local SQLite only. Real environment variables override
-`.env`. `.env` is git-ignored (`.env`, `.env.*`, `!.env.example`); `.env.example`
+`.env`. `.env` is git-ignored (`.env*`, `*.env`, `!.env.example`, so copies and
+backups too); `.env.example`
 (placeholders only) documents every key. **`bin\` then holds the password in plain
 text — never zip or share the repo folder or `bin\` with `.env` in it** (GitHub
 "Download ZIP" / `git archive` exclude it).
@@ -68,7 +71,7 @@ Build + run the logic tests (build the app first — see below):
 dotnet test PetSitters.Tests -c Debug
 ```
 
-MySQL parity tests are **opt-in** (otherwise all 102 report Skipped/Inconclusive).
+MySQL parity tests are **opt-in** (otherwise all 121 report Skipped/Inconclusive).
 Set `PETSITTERS_TEST_MYSQL_URL` to a `mysql://` URL for a server where databases
 can be created, or `PETSITTERS_TEST_MYSQL=1` to reuse the server from
 `DATABASE_URL`/`.env` (that user must be allowed to create and drop databases),
@@ -78,8 +81,9 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
 ```
 Each run creates its own `sitters4us_test_<UTC yyyyMMddTHHmm>_<8 hex>` database,
 empties every table before each test, drops it at the end, and drops leftovers older
-than 6 hours on the next run. It never touches the app's database. About 6 minutes
-against the cloud server.
+than 6 hours on the next run. It never touches the app's database. About 4–7 minutes
+against the cloud server. A **timeout** failure there is the network (re-run it); an
+**assertion** failure is a real engine difference (see `docs/CI.md`).
 
 The UI tests launch the app with `PETSITTERS_DB=sqlite` (an environment variable,
 so it beats `.env`): the suite never touches the shared cloud database.
@@ -159,8 +163,10 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 - **Settings** (environment variables override `.env`; see `.env.example`):
   `DATABASE_URL` (`mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-mode=REQUIRED`;
   ssl-mode DISABLED/PREFERRED/REQUIRED/VERIFY_CA/VERIFY_IDENTITY, default REQUIRED;
-  port default 3306), `PETSITTERS_DB` = `auto` (default) | `sqlite` (alias `local`:
-  skip MySQL), `DB_CONNECT_TIMEOUT_SECONDS` (1–60, default 8).
+  optional `ssl-ca=<CA file>`; port default 3306), `PETSITTERS_DB` = `auto` (default)
+  | `sqlite` (alias `local`: skip MySQL), `DB_CONNECT_TIMEOUT_SECONDS` (1–60,
+  default 8). Variable names match case-insensitively; an unreadable `.env` counts
+  as no settings.
 - **MySQL schema differences** (`InitializeMySql`): `INT AUTO_INCREMENT PRIMARY KEY`
   (the server requires a primary key on every table); `Email VARCHAR(255)` (the
   `(Email, Role)` unique key can't use TEXT); multi-line fields `MEDIUMTEXT`, other
@@ -171,9 +177,12 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   CASCADE / SET NULL FKs. Tables are created in one command, only if a single
   `information_schema` check finds any missing.
 - **Pool settings** (`MySqlUrl`): max 5 (the server's connection limit is small and
-  shared), min 1 (a new TLS connection costs ~1.2–1.9 s), `ConnectionReset=false`
-  (measured 392 → 195 ms per pooled query; safe because the app sets no session
-  state). Don't change these without re-measuring.
+  shared), min 0 with a 180 s idle timeout (min 1 was reversed: with
+  `ConnectionReset=false` the pool reuses a connection without checking it, so after
+  sleep or a Wi-Fi change the next click failed; a long pause now costs one ~1.5 s
+  TLS handshake instead), `ConnectionReset=false` (measured 392 → 195 ms per pooled
+  query; safe because the app sets no session state). Connection failures clear the
+  pool (`MySqlConnection.ClearAllPools`). Don't change these without re-measuring.
 - `Database` takes the db path as a constructor arg, so tests point it at an
   isolated temp file (see `DatabaseTestBase`, whose virtual `CreateDatabase()` the
   MySQL parity subclasses override). **Deleting the `.db` file resets only the
@@ -231,22 +240,34 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   `%AppData%\PetSitters\UserImages` on the uploading PC and only that path is stored,
   so on the cloud database other PCs don't see them (pet images on the sitter side
   only work on the same PC).
+- **Shared database = concurrent users.** Change a booking's status ONLY through
+  `BookingService` (`TryUpdateStatus`: a conditional UPDATE that refuses if the
+  other person changed it first; the service's guard returns the same
+  `ChangedElsewhere` result when it reads an already-changed status; reload the list
+  when it's set). Never call `UpdateStatus` from a view. Image paths read from the
+  database go through `LocalImages.TrustedPathOrNull` (a text-only check: never
+  load or delete a path that isn't directly in this PC's image folder; don't add
+  `Path.GetFullPath`, it can touch the network). Booking dates are stored
+  offset-free; legacy rows with an offset are read as their clock value. Edit a
+  `User.Clone()` and copy it back only after the save succeeds. `UpdateDetails`
+  writes name/phone/location only; the picture goes through `UpdateProfileImage`.
 - **Cloud latency:** ~195 ms per query, so screens must load each list with ONE
   query: `BookingRepository.GetDetailsForOwner/GetDetailsForSitter`,
   `UserRepository.GetSittersWithProfiles`, `ChatRepository.GetForBookingWithSenderNames`
   (JOINs). Never add per-row lookups (`FindById`/`GetByOwner` inside a loop) to a
   view: tests assert single round trips via `Database.ConnectionsOpened`. Measured
   owner dashboard 11.0 s -> 1.2 s, accept 14.3 s -> 1.2 s after this change. The
-  dashboards' `BookingStatusChanged` listeners reload after status changes and are
-  detached on `Unloaded` (they used to leak one per login). Queries still run on
-  the UI thread.
+  dashboards do **not** subscribe to `BookingStatusChanged` (it leaked one listener
+  per login, then swallowed failed reloads); each action reloads its lists
+  explicitly, so failures reach the error message. Queries still run on the UI thread.
 - **2-tier security:** every copy of the app holds the database credential in plain
   text and talks to the database directly, so authorisation rules (owner-only
   cancel, chat per booking, …) are enforced only in the client; anyone with the
   `.env` can bypass them. Mitigations: a dedicated database and least-privilege user
   (SELECT/INSERT/UPDATE/DELETE on that database only), trusted sources on the server,
-  rotating the password after the assignment, `ssl-mode=VERIFY_CA` (REQUIRED encrypts
-  but doesn't verify the certificate).
+  rotating the password after the assignment, `ssl-mode=VERIFY_CA` with `ssl-ca=`
+  (REQUIRED encrypts but doesn't verify the certificate; VERIFY_CA not yet tried
+  against the server).
 - Team TODOs noted in the report doc: a "verified/unverified" sitter field and a
   pet-card UI redesign.
 

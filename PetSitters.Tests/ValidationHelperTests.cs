@@ -16,6 +16,24 @@ namespace PetSitters.Tests
     [TestClass]
     public class ValidationHelperTests
     {
+        // TryParseRate reads numbers in the user's culture (the app's audience
+        // writes "45.50"). Pin a '.'-decimal culture so these tests don't fail on
+        // a PC set to, say, German, where "45.555" means forty-five thousand.
+        private System.Globalization.CultureInfo _originalCulture;
+
+        [TestInitialize]
+        public void PinCulture()
+        {
+            _originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-NZ");
+        }
+
+        [TestCleanup]
+        public void RestoreCulture()
+        {
+            System.Globalization.CultureInfo.CurrentCulture = _originalCulture;
+        }
+
         // ---- Email: equivalence partitions (valid vs several invalid classes) ----
         [DataTestMethod]
         [TestCategory("Unit")]
@@ -107,6 +125,27 @@ namespace PetSitters.Tests
             Assert.AreEqual(expected, ok);
             if (expected)
                 Assert.IsTrue(rate >= 0m);
+        }
+
+        /// <summary>
+        /// Boundary-value analysis on the money column's range and precision:
+        /// DECIMAL(10,2) on the cloud database. Larger values would be rejected
+        /// by the server, and a third decimal place would be rounded there but
+        /// kept by SQLite, so the two engines would disagree.
+        /// </summary>
+        [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
+        [TestCategory("Positive")]
+        [DataRow("99999999.99", true, DisplayName = "The largest value that fits")]
+        [DataRow("100000000", false, DisplayName = "Just too large")]
+        [DataRow("45.5", true, DisplayName = "One decimal place")]
+        [DataRow("45.55", true, DisplayName = "Two decimal places (cents)")]
+        [DataRow("45.555", false, DisplayName = "Three decimal places")]
+        public void TryParseRate_FitsTheMoneyColumn(string text, bool expected)
+        {
+            Assert.AreEqual(expected, ValidationHelper.TryParseRate(text, out decimal _));
         }
 
         // ---- Pet age (months): optional, whole number, boundary 0-11 ----
