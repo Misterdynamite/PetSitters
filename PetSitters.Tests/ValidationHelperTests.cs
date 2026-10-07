@@ -36,6 +36,27 @@ namespace PetSitters.Tests
             Assert.AreEqual(expected, ValidationHelper.IsValidEmail(email));
         }
 
+        /// <summary>
+        /// Boundary-value analysis on the 254-character email limit (RFC 5321).
+        /// It matters for the cloud database: Email is VARCHAR(255) there, and the
+        /// server's STRICT mode rejects longer values instead of truncating them.
+        /// </summary>
+        [DataTestMethod]
+        [TestCategory("Unit")]
+        [TestCategory("Boundary")]
+        [TestCategory("InvalidInput")]
+        [DataRow(253, true, DisplayName = "253 characters: just inside")]
+        [DataRow(254, true, DisplayName = "254 characters: the maximum")]
+        [DataRow(255, false, DisplayName = "255 characters: just over")]
+        public void IsValidEmail_EnforcesMaximumLengthBoundary(int length, bool expected)
+        {
+            const string domain = "@example.com";
+            string email = new string('a', length - domain.Length) + domain;
+
+            Assert.AreEqual(length, email.Length);
+            Assert.AreEqual(expected, ValidationHelper.IsValidEmail(email));
+        }
+
         // ---- Password: boundary-value analysis around MinPasswordLength (6) ----
         [DataTestMethod]
         [TestCategory("Unit")]

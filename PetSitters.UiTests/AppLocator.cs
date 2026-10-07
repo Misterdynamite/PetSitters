@@ -4,11 +4,17 @@ using System.IO;
 namespace PetSitters.UiTests
 {
     /// <summary>
-    /// Finds the built PetSitters.exe and the app's live SQLite database on disk.
+    /// Finds the built PetSitters.exe and the app's local SQLite database on disk.
     ///
-    /// The tests deliberately drive the same database the real app uses
-    /// (<c>%AppData%\PetSitters\petsitters.db</c>) so they exercise the genuine
-    /// startup + persistence path. Because of that, each run wipes that file
+    /// The tests deliberately drive the app's LOCAL SQLite store
+    /// (<c>%AppData%\PetSitters\petsitters.db</c>) - the real file the app uses
+    /// when it runs locally or falls back from the cloud - so they exercise the
+    /// genuine startup + persistence path. They never touch the shared cloud
+    /// (MySQL) database: <see cref="PetSittersDriver"/> launches every app with
+    /// <c>PETSITTERS_DB=sqlite</c>, which (as an environment variable, it beats
+    /// the .env) makes the app skip MySQL even when a .env next to the exe sets
+    /// DATABASE_URL. The cloud database could not be reset between tests and
+    /// must never collect test accounts; the local file can, so each run wipes it
     /// first (see <see cref="WipeDatabase"/>) to start from a known-empty state.
     /// </summary>
     internal static class AppLocator

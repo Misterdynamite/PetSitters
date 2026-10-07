@@ -94,6 +94,9 @@
     <Compile Include="Models\Pet.cs" />
     <Compile Include="Models\Booking.cs" />
     <Compile Include="Data\Database.cs" />
+    <Compile Include="Data\DbCommandExtensions.cs" />
+    <Compile Include="Data\MySqlUrl.cs" />
+    <Compile Include="Data\SqlDialect.cs" />
     <Compile Include="Data\UserRepository.cs" />
     <Compile Include="Data\SitterProfileRepository.cs" />
     <Compile Include="Data\PetRepository.cs" />
@@ -104,6 +107,8 @@
     <Compile Include="Services\AuthService.cs" />
     <Compile Include="Services\BookingService.cs" />
     <Compile Include="Services\AppServices.cs" />
+    <Compile Include="Services\AppConfig.cs" />
+    <Compile Include="Services\DatabaseSelector.cs" />
     <Compile Include="Views\LoginView.xaml.cs">
       <DependentUpon>LoginView.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -152,8 +157,23 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <!--
+    Runtime settings (DATABASE_URL etc.). The repo-root .env is copied next to
+    PetSitters.exe, where the app reads it at launch, but ONLY if it exists:
+    it's git-ignored and holds a password, so CI and fresh clones build without
+    it (and run on the local SQLite database). Hidden from Solution Explorer.
+    Note: anything under bin\ then contains the password; don't share build folders.
+  -->
+  <ItemGroup Condition="Exists('.env')">
+    <None Include=".env">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
+    <!-- Cloud database driver (MIT). MySQL is tried first at launch; SQLite is the fallback. -->
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Images\Paw2.png" />
@@ -169,11 +189,20 @@
         every F5 would otherwise wait for the whole suite;
       - /p:SkipTests=true: the CI workflow builds once with this, then runs each
         test stage as its own step so the log shows which gate failed.
+    MySQL parity tests (TestCategory=MySql) are excluded here and in CI: they
+    need the network and a MySQL server (run them on purpose, see docs/CI.md).
     The FlaUI UI suite is deliberately NOT run here: it takes over the real
     desktop. See docs/CI.md for why, and how it is run instead.
     PetSitters.Tests references the built EXE (not this project), so testing it
     here cannot recurse back into this build.
   -->
+  <!--
+    If the repo-root .env has been deleted, also delete the copy left in the
+    output folder, or the app would keep using the cloud database from a stale file.
+  -->
+  <Target Name="RemoveStaleDotEnv" AfterTargets="Build" Condition="!Exists('$(MSBuildProjectDirectory)\.env')">
+    <Delete Files="$(OutDir).env" />
+  </Target>
   <Target Name="RunTestsAfterBuild" AfterTargets="Build"
           Condition="'$(BuildingInsideVisualStudio)' != 'true' And '$(SkipTests)' != 'true'">
     <PropertyGroup>
@@ -181,8 +210,8 @@
       <TestResultsDir>$(MSBuildProjectDirectory)\TestResults</TestResultsDir>
     </PropertyGroup>
     <Message Importance="high" Text="Quality gate: smoke tests (TestCategory=Smoke)" />
-    <Exec Command="dotnet test &quot;$(TestProject)&quot; -c $(Configuration) --nologo --filter TestCategory=Smoke --logger &quot;trx;LogFileName=smoke.trx&quot; --results-directory &quot;$(TestResultsDir)&quot;" />
+    <Exec Command="dotnet test &quot;$(TestProject)&quot; -c $(Configuration) --nologo --filter &quot;TestCategory=Smoke&amp;TestCategory!=MySql&quot; --logger &quot;trx;LogFileName=smoke.trx&quot; --results-directory &quot;$(TestResultsDir)&quot;" />
     <Message Importance="high" Text="Quality gate: full logic + integration suite" />
-    <Exec Command="dotnet test &quot;$(TestProject)&quot; -c $(Configuration) --nologo --no-build --logger &quot;trx;LogFileName=full.trx&quot; --results-directory &quot;$(TestResultsDir)&quot;" />
+    <Exec Command="dotnet test &quot;$(TestProject)&quot; -c $(Configuration) --nologo --no-build --filter &quot;TestCategory!=MySql&quot; --logger &quot;trx;LogFileName=full.trx&quot; --results-directory &quot;$(TestResultsDir)&quot;" />
   </Target>
 </Project>

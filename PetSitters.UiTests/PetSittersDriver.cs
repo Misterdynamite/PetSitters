@@ -56,11 +56,33 @@ namespace PetSitters.UiTests
             return TimeSpan.FromMilliseconds(700);
         }
 
-        /// <summary>Launches PetSitters.exe and waits for its main window.</summary>
-        public PetSittersDriver(string executablePath)
+        /// <summary>
+        /// Launches PetSitters.exe and waits for its main window.
+        ///
+        /// The app is MySQL-first: if a .env with DATABASE_URL sits next to the
+        /// exe, it would connect to the SHARED cloud database, which these tests
+        /// must never write to (and can't wipe between tests). So every launch sets
+        /// <c>PETSITTERS_DB=sqlite</c>, forcing the local file that
+        /// <see cref="AppLocator.WipeDatabase"/> resets. Environment variables
+        /// override the .env. A test can replace or add variables through
+        /// <paramref name="environment"/>, e.g. to exercise the fallback.
+        /// </summary>
+        public PetSittersDriver(string executablePath, System.Collections.Generic.IDictionary<string, string> environment = null)
         {
             _automation = new UIA3Automation();
-            _app = Application.Launch(executablePath);
+
+            var startInfo = new System.Diagnostics.ProcessStartInfo(executablePath)
+            {
+                UseShellExecute = false,   // required for per-process environment variables
+                WorkingDirectory = System.IO.Path.GetDirectoryName(executablePath),
+            };
+            startInfo.EnvironmentVariables["PETSITTERS_DB"] = "sqlite";
+            if (environment != null)
+            {
+                foreach (var pair in environment)
+                    startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+            }
+            _app = Application.Launch(startInfo);
 
             _window = Retry.WhileNull(
                 () => _app.GetMainWindow(_automation),

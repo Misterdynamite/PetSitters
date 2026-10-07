@@ -1,12 +1,20 @@
 # Continuous integration for Sitters4Us (ENSE707 Task 5).
 #
-# Every push and pull request to main goes through three quality gates, in
+# Every push and pull request to main goes through four quality gates (0-3), in
 # order; a failure at any gate stops the run and marks the commit/PR red:
+#   0. Secrets      - no .env file is tracked (the repo is public; .env holds
+#                     the database password).
 #   1. Build        - the WPF app compiles (Release).
-#   2. Smoke        - 8 core tests (TestCategory=Smoke) prove the build is
+#   2. Smoke        - the core tests (TestCategory=Smoke, MySql excluded) prove the build is
 #                     basically sane before spending time on the full suite.
 #   3. Full suite   - all logic + integration tests in PetSitters.Tests.
 # Results (.trx) are always uploaded as an artifact and summarised on the run page.
+#
+# CI never connects to the cloud MySQL database: the checkout has no .env
+# (git-ignored), no DATABASE_URL secret is configured, and the MySQL parity
+# tests (TestCategory=MySql) are excluded. Tests run on throwaway SQLite files.
+# Do NOT add the production DATABASE_URL as a repository secret: run logs and
+# artifacts of this public repo are public.
 #
 # The FlaUI UI suite (PetSitters.UiTests) is NOT run here: it drives a real
 # desktop session and is run locally before merging instead. See docs/CI.md.
@@ -31,6 +39,15 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: "Gate 0: No secrets committed"
+        shell: pwsh
+        run: |
+          # .env holds the database password and must never be in git;
+          # .env.example (placeholders only) is the one allowed exception.
+          $tracked = git ls-files -- .env '.env.*' '**/.env' '**/.env.*' | Where-Object { $_ -notmatch '(^|/)\.env\.example$' }
+          if ($tracked) { Write-Error "Secret file(s) tracked in git: $($tracked -join ', ')"; exit 1 }
+          Write-Output "No .env files tracked."
+
       # The app is a classic (non-SDK) csproj: it needs Visual Studio's MSBuild,
       # not `dotnet build`. The SDK-style test project uses the .NET SDK.
       - name: Set up MSBuild
@@ -47,10 +64,10 @@ jobs:
         run: msbuild PetSitters.csproj /t:Restore,Build /p:Configuration=${{ env.CONFIGURATION }} /p:SkipTests=true /nologo /v:minimal
 
       - name: "Gate 2: Smoke tests"
-        run: dotnet test PetSitters.Tests -c ${{ env.CONFIGURATION }} --nologo --filter TestCategory=Smoke --logger "trx;LogFileName=smoke.trx" --results-directory TestResults
+        run: dotnet test PetSitters.Tests -c ${{ env.CONFIGURATION }} --nologo --filter "TestCategory=Smoke&TestCategory!=MySql" --logger "trx;LogFileName=smoke.trx" --results-directory TestResults
 
       - name: "Gate 3: Full logic + integration suite"
-        run: dotnet test PetSitters.Tests -c ${{ env.CONFIGURATION }} --nologo --no-build --logger "trx;LogFileName=full.trx" --results-directory TestResults
+        run: dotnet test PetSitters.Tests -c ${{ env.CONFIGURATION }} --nologo --no-build --filter "TestCategory!=MySql" --logger "trx;LogFileName=full.trx" --results-directory TestResults
 
       - name: Summarise test results
         if: always()   # also report when a gate failed

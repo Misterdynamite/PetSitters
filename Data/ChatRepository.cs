@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
+using System.Data.Common;
 using System.Globalization;
 using PetSitters.Models;
 
@@ -27,11 +27,11 @@ namespace PetSitters.Data
                 command.CommandText = @"
 INSERT INTO ChatMessages (BookingId, SenderUserId, MessageText, CreatedUtc)
 VALUES (@booking, @sender, @text, @created);
-SELECT last_insert_rowid();";
-                command.Parameters.AddWithValue("@booking", message.BookingId);
-                command.Parameters.AddWithValue("@sender", message.SenderUserId);
-                command.Parameters.AddWithValue("@text", message.MessageText ?? string.Empty);
-                command.Parameters.AddWithValue("@created", message.CreatedUtc.ToString("o", CultureInfo.InvariantCulture));
+" + _db.Dialect.SelectLastInsertId;
+                command.AddParameter("@booking", message.BookingId);
+                command.AddParameter("@sender", message.SenderUserId);
+                command.AddParameter("@text", message.MessageText ?? string.Empty);
+                command.AddParameter("@created", message.CreatedUtc.ToString("o", CultureInfo.InvariantCulture));
                 message.Id = Convert.ToInt32(command.ExecuteScalar());
                 return message;
             }
@@ -47,7 +47,7 @@ SELECT last_insert_rowid();";
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM ChatMessages WHERE BookingId = @booking ORDER BY CreatedUtc ASC;";
-                command.Parameters.AddWithValue("@booking", bookingId);
+                command.AddParameter("@booking", bookingId);
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -57,7 +57,7 @@ SELECT last_insert_rowid();";
             return list;
         }
 
-        private static ChatMessage Map(SQLiteDataReader reader)
+        private static ChatMessage Map(DbDataReader reader)
         {
             return new ChatMessage
             {

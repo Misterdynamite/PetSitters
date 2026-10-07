@@ -16,6 +16,12 @@ namespace PetSitters.Views
             InitializeComponent();
             _services = services;
             _shell = shell;
+
+            // On the local fallback, a cloud account "doesn't exist", so login would
+            // say "Incorrect email or password" and invite a duplicate local sign-up.
+            // Explain why up front instead.
+            if (services.Storage.FellBack)
+                OfflineNotice.Visibility = Visibility.Visible;
         }
 
         private void Login_Click(object sender, RoutedEventArgs e)

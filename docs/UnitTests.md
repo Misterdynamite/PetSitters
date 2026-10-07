@@ -6,10 +6,17 @@ requirements traceability matrix, and how to run everything.
 
 - **Project:** `PetSitters.Tests` (MSTest, SDK-style, targets `net472`)
 - **What it tests:** the UI-independent logic layer — `Services` (`AuthService`,
-  `BookingService`, `ValidationHelper`, `PasswordHasher`), the domain `Models`,
-  and the SQLite `Data` repositories.
-- **Result:** **96 test methods → 184 executed cases** (the difference is
-  `[DataRow]` data-driven expansion). All passing (last run 2026-10-01).
+  `BookingService`, `ValidationHelper`, `PasswordHasher`, and the launch-time
+  database configuration: `AppConfig`/`EnvFile` and `DatabaseSelector`), the
+  domain `Models`, the `Data` repositories, and `MySqlUrl` (turning
+  `DATABASE_URL` into a connection string).
+- **Result:** **119 test methods → 238 executed cases on SQLite** (the
+  difference is `[DataRow]` data-driven expansion). All passing (last run
+  2026-10-07).
+- **Plus, opt-in:** **95 MySQL parity cases** that re-run the database tests
+  against a real MySQL server. All passing against the real server on
+  2026-10-07. They are skipped unless you ask for them (see
+  [MySQL parity](#mysql-parity-opt-in)).
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
   `PetSitters.UiTests` (FlaUI) project.
 
@@ -28,6 +35,19 @@ the .NET SDK), then run the tests:
 dotnet test PetSitters.Tests -c Debug
 ```
 
+A command-line MSBuild build of the app already runs this suite as a gate
+(smoke set, then everything except the `MySql` category); add
+`/p:SkipTests=true` to build only. See [CI.md](CI.md).
+
+The tests never need the cloud database or a `.env` file. The MySQL parity
+run is the one exception, and it only happens when you opt in:
+
+```
+# PowerShell: reuse the server named in DATABASE_URL (environment or the repo-root .env)
+$env:PETSITTERS_TEST_MYSQL = "1"
+dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
+```
+
 ---
 
 ## Test-design techniques (ENSE707 Lab 1–5)
@@ -35,19 +55,29 @@ dotnet test PetSitters.Tests -c Debug
 | Lab | Technique | Where it appears |
 |-----|-----------|------------------|
 | 1 | MSTest, AAA structure, `Method_Scenario_ExpectedResult` naming, invalid-input tests | Every test |
-| 1 / 2 | Security testing (salting, no plaintext, no user enumeration) | `PasswordHasherTests`, `AuthServiceTests` |
-| 2 | Result-object assertions (`AuthResult.Success` / `ErrorMessage`) | `AuthServiceTests` |
+| 1 / 2 | Security testing (salting, no plaintext, no user enumeration, the database password never shown in an error or tooltip) | `PasswordHasherTests`, `AuthServiceTests`, `DatabaseConfigurationTests`, `DatabaseSelectorTests` |
+| 2 | Result-object assertions (`AuthResult.Success` / `ErrorMessage`, `DatabaseSelection.Summary` / `FellBack`) | `AuthServiceTests`, `DatabaseSelectorTests` |
 | 4 | Each test tagged to a requirement ID (traceability) | Class summaries + RTM below |
-| 5 | Equivalence partitioning + boundary-value analysis | `ValidationHelperTests`, `BookingCalculationTests` |
-| 5 | Data-driven tests with `[DataRow]` | `ValidationHelperTests`, `BookingCalculationTests`, parts of `AuthServiceTests` |
+| 5 | Equivalence partitioning + boundary-value analysis | `ValidationHelperTests`, `BookingCalculationTests`, `DatabaseConfigurationTests` (1–60 s connect timeout, `PETSITTERS_DB` modes) |
+| 5 | Data-driven tests with `[DataRow]` | `ValidationHelperTests`, `BookingCalculationTests`, `DatabaseConfigurationTests`, parts of `AuthServiceTests` |
 | 5 | Component/integration tests against **real** SQLite persistence, each isolated | `*RepositoryTests`, `ChatPersistenceTests` |
+| 5 | The same component tests re-run on a second engine (MySQL) by inheritance, so one set of assertions proves both behave alike | `MySqlParityTests` (opt-in) |
 
 ### Test isolation (`DatabaseTestBase`)
 
 Every test that needs a database gets its **own** temporary SQLite file, created
 in `TestInitialize` and deleted in `TestCleanup`. Tests never share state and
 never touch the real `%AppData%\PetSitters\petsitters.db` used by the running
-app, so they can run in any order (or in parallel) safely.
+app, or the cloud database, so they can run in any order (or in parallel)
+safely. Apart from the opt-in MySQL run, they don't read the app's `.env`
+either: a test that needs a configuration builds its own, in memory
+(`AppConfig.FromValues`) or as a throwaway temp `.env` file.
+
+The database comes from `DatabaseTestBase.CreateDatabase()`, which is
+`virtual`: it returns a temp SQLite file by default, and the MySQL parity
+subclasses override it to return the run's temporary MySQL database instead.
+Nothing else about the tests changes. `TestCleanup` only deletes a file when
+there is one, so the MySQL run skips it.
 
 ---
 
@@ -65,7 +95,7 @@ app, so they can run in any order (or in parallel) safely.
 | `Verify_WithTamperedHash_ReturnsFalse` | A modified hash fails verification. |
 | `Verify_WithMissingStoredHashOrSalt_ReturnsFalse` `[DataRow ×2]` | A row with no credentials cannot authenticate. |
 
-#### `ValidationHelperTests` — 7 methods / 40 cases · data quality · FR-A1, FR-O3, FR-S2
+#### `ValidationHelperTests` — 8 methods / 43 cases · data quality · FR-A1, FR-O3, FR-S2
 | Test | Technique | Cases |
 |------|-----------|-------|
 | `IsValidEmail_ClassifiesInputCorrectly` | Equivalence partitioning (valid vs. empty / no-@ / no-domain / no-local / spaces) | 9 |
@@ -99,6 +129,10 @@ app, so they can run in any order (or in parallel) safely.
 | `IsActive_OnlyForPendingAndAccepted` | Equivalence partition over statuses: only live bookings hold a pet's or sitter's time | 4 |
 
 ### Component / integration tests (real isolated SQLite)
+
+Every class in this section except `DatabaseMigrationTests` (the migrations
+are SQLite-only) also runs on MySQL in the opt-in
+[parity run](#mysql-parity-opt-in).
 
 #### `SharedEmailTests` — 9 methods / 12 cases · REQ-GR-06, FR-A1, FR-A2
 | Test | What it verifies |
@@ -169,7 +203,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `Register_WithAllFieldsSupplied_PersistsPhoneAndLocation` | All supplied details are stored. |
 | `Register_DuplicateEmail_Fails_CaseInsensitive` | A duplicate email for the **same role** (different casing) is rejected. |
 | `Register_StoresHashedPassword_NotPlainText` | The persisted row stores a hash + salt, not the password. |
-| `Login_WithCorrectCredentials_Succeeds` | Correct credentials log in. |
+| `Login_WithCorrectCredentials_SucceedsWithinPerformanceBudget` | Correct credentials log in, within the sign-in time budget (REQ-NFR-02). |
 | `Login_WithWrongPassword_Fails` | Wrong password is rejected. |
 | `Login_WithMissingInput_Fails` `[DataRow ×3]` | Empty email/password combinations are rejected. |
 | `Login_DoesNotRevealWhetherEmailIsRegistered` | Wrong password and unknown email return the **same** message (no user enumeration). |
@@ -186,7 +220,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | Test | What it verifies |
 |------|------------------|
 | `Insert_ThenGetByOwner_ReturnsThePets` | An owner's pets are stored and returned (name-ordered). |
-| `Insert_PersistsYearsAndOptionalMonths` | Both age parts round-trip through SQLite. |
+| `Insert_PersistsYearsAndOptionalMonths` | Both age parts round-trip through the database. |
 | `Insert_DefaultsMonthsToZero_WhenNotSupplied` | Omitting months stores 0. |
 | `Delete_RemovesOnlyTheSelectedPet` | Deleting one pet leaves the others intact. |
 
@@ -197,20 +231,123 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `Upsert_UpdatesInPlace_WhenProfileAlreadyExists` | A second save updates in place (1:1, no duplicate). |
 | `GetByUserId_ReturnsNull_WhenSitterHasNoProfileYet` | Missing profile returns null. |
 
-#### `BookingRepositoryTests` — 4 methods · FR-O4, FR-S4
+#### `BookingRepositoryTests` — 7 methods / 8 cases · FR-O4, FR-S4, REQ-PO-07
 | Test | What it verifies |
 |------|------------------|
 | `Insert_BookingIsVisibleToBothOwnerAndSitter` | A request appears in both the owner's and sitter's lists. |
 | `UpdateStatus_Accept_IsPersisted` | Accepting a request persists the new status. |
+| `UpdateStatus_Decline_IsPersisted` | Declining a request persists the new status (tested apart from accept so a failure names the branch). |
+| `UpdateStatus_Cancel_IsPersistedFromEitherStage` `[DataRow ×2]` | REQ-PO-07: cancelling from pending or accepted persists as Cancelled; the record is kept, not deleted. |
+| `UpdateStatus_Cancel_RemovesBookingFromSittersPendingQueue` | A cancelled booking leaves the sitter's pending requests but stays on the owner's record. |
 | `GetForSitter_DoesNotReturnAnotherSittersBookings` | A sitter sees only their own requests (isolation). |
 | `Insert_PreservesDailyRateSnapshot` | The rate captured at booking time is stored. |
 
 #### `ChatPersistenceTests` — 3 methods · FR-O5, FR-S5
 | Test | What it verifies |
 |------|------------------|
-| `Message_IsPersisted_AndReadBackByAFreshRepository` | A message survives being read back by a **new** repository instance (proves on-disk persistence). |
+| `Message_IsPersisted_AndReadBackByAFreshRepository` | A message survives being read back by a **new** repository instance (proves the message is persisted, not cached). |
 | `GetForBooking_ReturnsOnlyThatBookingsMessages` | Messages are scoped to their booking (not visible to unrelated bookings/users). |
 | `GetForBooking_ReturnsMessagesInChronologicalOrder` | Messages return oldest-first. |
+
+### Database configuration & launch-time choice (REQ-GR-09, proposed)
+
+The app tries the shared cloud MySQL database first and falls back to the local
+SQLite file if it can't use it, decided once at launch. These two classes test
+how that choice is configured and made. Every URL in them uses made-up
+credentials; none contacts the real cloud server.
+
+#### `DatabaseConfigurationTests` — 13 methods / 37 cases · REQ-GR-09 · security
+Covers the `.env` format (`EnvFile`), which source wins (`AppConfig`), and turning
+`DATABASE_URL` into a MySQL connection string (`MySqlUrl`). Pure unit tests: no
+database is opened.
+
+| Test | What it verifies (technique) | Cases |
+|------|------------------------------|-------|
+| `EnvFile_ParsesKeyValuePairs_IgnoringCommentsAndBlanks` | `KEY=value` lines are read; `#` comments, blank lines and surrounding spaces are ignored (Smoke) | 1 |
+| `EnvFile_ValueFormats` | Equivalence partitioning over value formats: double / single quotes stripped, only the first `=` splits, leading `export`, empty value, a lone quote kept | 6 |
+| `EnvFile_MalformedLines_AreIgnored` | Invalid input: a line with no `=` or no key is skipped, so a typo can't stop the app starting | 1 |
+| `EnvFile_MissingFile_MeansNoSettings` | Error handling: no `.env` means no settings (local database only), not an exception | 1 |
+| `AppConfig_EnvironmentVariable_OverridesEnvFile` | Precedence: a real environment variable beats the `.env`, and keys only in the file are still read (this is how the UI tests force SQLite) | 1 |
+| `AppConfig_DatabaseMode` | Equivalence partitioning on `PETSITTERS_DB`: `sqlite` (any casing) and `local` force the local database; `auto`, unset or a typo keep the normal MySQL-first behaviour | 6 |
+| `AppConfig_ConnectTimeout_IsBounded` | Boundary-value analysis on `DB_CONNECT_TIMEOUT_SECONDS` (1–60): 1 and 60 accepted; 0, 61 and non-numbers fall back to the 8 s default | 5 |
+| `AppConfig_NoUrl_MeansNoCloudDatabase` | A blank `DATABASE_URL` counts as not configured | 1 |
+| `MySqlUrl_ParsesEveryPart` | Host, port, user, password, database, ssl-mode and connect timeout all reach the connection string, and the pool stays capped (the server's connection limit is shared) (Smoke) | 1 |
+| `MySqlUrl_NoPort_UsesMySqlDefault_AndNoSslMode_RequiresTls` | Defaults: no port → 3306; no ssl-mode → `REQUIRED`, so a URL is never silently unencrypted | 1 |
+| `MySqlUrl_PercentEncodedCredentials_AreDecoded` | `%`-encoded user and password are decoded; an encoded `:` stays inside the password | 1 |
+| `MySqlUrl_SslModes` | Each of `DISABLED` / `PREFERRED` / `REQUIRED` / `VERIFY_CA` / `VERIFY_IDENTITY` maps to the driver's mode; case-insensitive, dash or underscore | 5 |
+| `MySqlUrl_InvalidUrl_FailsWithoutLeakingThePassword` | Security + invalid input: empty, wrong scheme, no database, two path segments, no password, unknown ssl-mode, not a URL → a `FormatException` that names `DATABASE_URL` and never contains the password | 7 |
+
+#### `DatabaseSelectorTests` — 9 methods / 14 cases · REQ-GR-09 · reliability, security
+Covers `DatabaseSelector`, the launch-time choice. The cloud database is passed
+in as a factory, so "cloud reachable" is simulated with a temp SQLite file and
+"cloud unreachable" uses the real MySQL driver against a closed local port,
+which is refused (after about 2 s on Windows, which retries a refused connection). The header text asserted here is what the user sees.
+
+| Test | What it verifies (technique) | Cases |
+|------|------------------------------|-------|
+| `Select_CloudReachable_UsesCloud` | The cloud database is used when it initialises; header "Cloud database", not flagged as a fallback (Smoke) | 1 |
+| `Select_CloudUnreachable_FallsBackToLocal_AndExplains` | The core rule: a refused connection opens the local database, header "Offline: local database", and the tooltip says changes won't be seen by other users without naming the server (Smoke) | 1 |
+| `Select_FailureAfterConnecting_IsReportedAsError_NotOffline` | Error handling: a failure after connecting (e.g. creating tables) still falls back, but reads "Cloud database error: local database" so a real bug isn't passed off as a network problem | 1 |
+| `IsConnectivityFailure_Classification` | Equivalence partitioning of failures: bad URL, socket error and timeout (bare or wrapped by the driver) mean "couldn't connect"; anything else is a real error | 5 |
+| `Select_CloudFailureMessage_NeverContainsThePassword` | Security: even if a driver error echoes the URL and password, the tooltip contains neither | 1 |
+| `Select_MalformedUrl_FallsBackToLocal` | Invalid input: a non-`mysql://` `DATABASE_URL` doesn't stop the app opening, and the tooltip names the expected form | 1 |
+| `Select_ForcedLocal_NeverTriesTheCloud` | `PETSITTERS_DB=sqlite`: the cloud is never attempted; header "Local database", not a fallback | 1 |
+| `Select_NoUrl_UsesLocalWithoutWarning` | No `DATABASE_URL`: local database, no warning, cloud never attempted | 1 |
+| `Redact_RemovesUrlAndPassword` | Security: `Redact` strips the URL and the password, in both raw and percent-decoded forms | 2 |
+
+### MySQL parity (opt-in)
+
+**9 classes / 95 cases · REQ-GR-09 · all passing against the real server on
+2026-10-07 (about 6 minutes).**
+
+`MySqlParityTests.cs` defines nine `[TestClass, TestCategory("MySql")]`
+subclasses. Each one inherits **every** test of a SQLite-backed class and
+overrides only `CreateDatabase()`, so the same assertions run unchanged on MySQL.
+Passing both proves the two engines behave alike where the app relies on them:
+schema and foreign keys, the case-insensitive `UNIQUE (Email, Role)` rule,
+upserts, name ordering, new-row ids, date ordering, and the REQ-GR-04 /
+REQ-GR-08 / REQ-PO-08 booking rules.
+
+| Parity class | Inherits all tests of | Cases |
+|--------------|-----------------------|------:|
+| `AuthServiceTests_MySql` | `AuthServiceTests` | 19 |
+| `BookingRepositoryTests_MySql` | `BookingRepositoryTests` | 8 |
+| `BookingServiceTests_MySql` | `BookingServiceTests` | 25 |
+| `BookingValidationTests_MySql` | `BookingValidationTests` | 17 |
+| `ChatPersistenceTests_MySql` | `ChatPersistenceTests` | 3 |
+| `UserRepositoryTests_MySql` | `UserRepositoryTests` | 4 |
+| `PetRepositoryTests_MySql` | `PetRepositoryTests` | 4 |
+| `SitterProfileRepositoryTests_MySql` | `SitterProfileRepositoryTests` | 3 |
+| `SharedEmailTests_MySql` | `SharedEmailTests` | 12 |
+| **Total** | | **95** |
+
+Not mirrored: `DatabaseMigrationTests` (the migrations it guards are SQLite-only)
+and the pure unit tests (no database). `SharedEmailTests`' duplicate-insert test
+expects any `DbException`, because the two drivers throw different exception
+types for the same constraint violation.
+
+**Its own temporary database.** The run never touches the app's database. It
+creates a fresh database named `sitters4us_test_<UTC yyyyMMddTHHmm>_<8 hex>`,
+empties every table before each test (as isolated as the per-test SQLite
+file), and drops the database when the run ends (`AssemblyCleanup`). If a run
+crashes, the next run drops any leftover test database older than 6 hours.
+Unique names mean two people can run it at the same time.
+
+**Strictly opt-in.** It needs a reachable server and takes minutes over the
+internet, so it only runs when one of these is set:
+
+| Variable | Meaning |
+|----------|---------|
+| `PETSITTERS_TEST_MYSQL_URL` | A `mysql://` URL for a server where you may create databases (its database part is ignored). |
+| `PETSITTERS_TEST_MYSQL=1` | Reuse the server from the app's `DATABASE_URL` (environment variable, or the repo-root `.env`). |
+
+The account needs permission to create and drop databases, so a least-privilege
+app account can't run it. Without either variable, the 95 cases are reported
+**Skipped** (Inconclusive), never failed: that is what happens in Visual
+Studio's Run All Tests. The build gate and CI go further and filter the
+category out (`TestCategory!=MySql`), so they never contact a MySQL server.
+Never add the real `DATABASE_URL` as a CI secret: the repository is public, and
+so are its logs.
 
 ---
 
@@ -228,7 +365,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | FR-O2 | Owner registers personal details (incl. location) | `Insert_AssignsId_*`, `UpdateDetails_PersistsEditedFields` | ✅ Passing |
 | FR-O3 | Owner registers pet details | `PetRepositoryTests`; `TryParseNonNegativeInt_*` (pet age) | ✅ Passing |
 | FR-O4 | Owner requests a booking | `BookingRepositoryTests` (insert/visibility/rate); `BookingCalculationTests` | ✅ Passing |
-| FR-O5 | Owner chats with sitter once accepted | `ChatPersistenceTests` (persistence + isolation) | ⚠️ Data layer tested; owner-side chat UI still WIP |
+| FR-O5 | Owner chats with sitter once accepted | `ChatPersistenceTests` (persistence + isolation, both directions); UI: `BookingJourney_*` checks the owner's Chats list | ✅ Passing. The owner-side Chats tab is implemented; no UI test sends a message from the owner side yet |
 | FR-S1 | Sitter registers personal details (incl. location) | `UserRepositoryTests` (shared user table) | ✅ Passing |
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
 | FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
@@ -237,11 +374,18 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
+| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (95 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-07) |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
 > and is exercised by the `PetSitters.UiTests` end-to-end journey rather than by
 > this logic suite.
+>
+> REQ-GR-09 is a **proposed** requirement ID, not yet in the report. The tests
+> are already tagged with it so the link holds once it is added. Its UI evidence
+> is `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` (an
+> unreachable cloud URL opens on the local database, says so in the header, and
+> registration still works) and `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase`.
 
 ---
 
@@ -249,11 +393,12 @@ when a requirement changes, quickly find the tests that must be reviewed.
 
 | Attribute | Evidence in the suite |
 |-----------|-----------------------|
-| **Security** | Salted PBKDF2 hashing, no plaintext storage, no user enumeration, per-booking chat isolation. |
+| **Security** | Salted PBKDF2 hashing, no plaintext storage, no user enumeration, per-booking chat isolation; the database password never appears in an error message or the header tooltip, and an unspecified ssl-mode still requires TLS. |
 | **Functional correctness** | Registration/login rules, booking visibility, cost calculations. |
-| **Reliability** | Bookings and messages persist and read back intact; status changes are durable. |
+| **Reliability** | Bookings and messages persist and read back intact; status changes are durable; the app still opens (on the local database) when the cloud database is unreachable or misconfigured. |
+| **Portability (database engines)** | The same 95 data-layer cases pass on SQLite and on MySQL (opt-in parity run). |
 | **Data quality** | Email/password/rate/age validation via boundary and equivalence tests. |
-| **Maintainability / testability** | Logic is UI-independent and tested directly; isolated temp databases keep tests deterministic. |
+| **Maintainability / testability** | Logic is UI-independent and tested directly; isolated temp databases keep tests deterministic; the cloud database is injected into `DatabaseSelector`, so fallback is tested without a network. |
 
 
 ---
@@ -263,21 +408,23 @@ when a requirement changes, quickly find the tests that must be reviewed.
 Every automated test, in both `PetSitters.Tests` and `PetSitters.UiTests`,
 carries MSTest `[TestCategory]` labels on two axes, so the suite can be
 reported and run by kind. Labels were assigned on 2026-10-01 from what each
-test actually asserts.
+test actually asserts, and on 2026-10-07 for the REQ-GR-09 database tests. The
+MySQL parity subclasses inherit their base class's labels and add `MySql`.
 
 **Test type**: what level or quality attribute the test exercises:
 
 | Label | Meaning here |
 |-------|--------------|
-| `Unit` | Pure logic, no database or UI (`ValidationHelper`, `PasswordHasher`, `Booking` rules, pet age). |
-| `Integration` | Runs against a real, isolated SQLite file (repositories, `AuthService`, `BookingService`, migration). |
+| `Unit` | Pure logic, no database or UI (`ValidationHelper`, `PasswordHasher`, `Booking` rules, pet age, `.env`/`AppConfig` parsing, `MySqlUrl`, most of `DatabaseSelector`). |
+| `Integration` | Runs against a real database: an isolated SQLite file, or (`MySql` category) a temporary MySQL database (repositories, `AuthService`, `BookingService`, migration, `DatabaseSelector`). |
 | `System` | Drives the real `PetSitters.exe` end to end through UI Automation (FlaUI). |
 | `Acceptance` | System tests that walk a requirement's acceptance criteria (REQ-xx-nn) as a user would. |
-| `Regression` | Re-run after every build to catch breakage: the whole UI suite, plus the migration data-loss guard. |
-| `Security` | Hashing/salting, no plaintext, no user enumeration, data isolation and authorisation (acting on someone else's data). |
+| `Regression` | Re-run after every build to catch breakage: the whole UI suite, plus both migration (data-loss guard) tests. |
+| `Security` | Hashing/salting, no plaintext, no user enumeration, data isolation and authorisation (acting on someone else's data), and the database password never appearing in errors or the tooltip. |
 | `Performance` | Timed against a budget (sign-in < 1 s, REQ-NFR-02). |
 | `Usability` | Checks the user is told what to do (specific validation messages, the Owner/Sitter prompt). |
-| `Smoke` | The 8-test sanity slice through the core journey, run first by the build and CI (see [CI.md](CI.md)). |
+| `Smoke` | The 12-case sanity slice through the core journey and the launch-time database choice, run first by the build and CI (see [CI.md](CI.md)). SQLite only: the gate's filter is `TestCategory=Smoke&TestCategory!=MySql`. |
+| `MySql` | Opt-in MySQL parity run against a remote MySQL server (see [MySQL parity](#mysql-parity-opt-in)). Excluded from the build gate and CI; skipped unless opted in. |
 
 **Scenario**: what kind of input or condition the test covers:
 
@@ -287,7 +434,7 @@ test actually asserts.
 | `Negative` | Well-formed input that a business rule correctly refuses (wrong password, overlap, duplicate, not your booking). |
 | `Boundary` | Values on and either side of a limit (6-char password, 0–11 months, 1 hour, 14 days, back-to-back dates, today). |
 | `InvalidInput` | Malformed, missing or out-of-range input (bad email, blank fields, non-numbers, negative values, no pet). |
-| `ErrorHandling` | Genuine error conditions handled safely: null/missing/tampered stored data, missing records, a database constraint violation, failed sign-in, nothing saved on rejection. |
+| `ErrorHandling` | Genuine error conditions handled safely: null/missing/tampered stored data, missing records, a database constraint violation, failed sign-in, nothing saved on rejection, and an unreachable or misconfigured cloud database (fallback). |
 
 A test can carry several labels; data-driven tests that mix valid and invalid
 rows are labelled with each kind they contain.
@@ -296,23 +443,23 @@ rows are labelled with each kind they contain.
 
 | Label | Methods | Executed cases |
 |-------|--------:|---------------:|
-| Unit | 23 | 87 |
-| Integration | 73 | 97 |
-| System | 6 | 6 |
-| Acceptance | 5 | 5 |
-| Regression | 8 | 8 |
-| Security | 19 | 23 |
+| Unit | 44 | 139 |
+| Integration | 75 | 99 |
+| System | 8 | 8 |
+| Acceptance | 6 | 6 |
+| Regression | 10 | 10 |
+| Security | 22 | 33 |
 | Performance | 1 | 1 |
 | Usability | 2 | 2 |
-| Smoke | 8 | 8 |
+| Smoke | 12 | 12 |
 | Accessibility | 0 | 0 |
-| Positive | 67 | 143 |
-| Negative | 29 | 54 |
-| Boundary | 19 | 79 |
-| InvalidInput | 22 | 69 |
-| ErrorHandling | 9 | 13 |
+| Positive | 81 | 176 |
+| Negative | 33 | 62 |
+| Boundary | 23 | 94 |
+| InvalidInput | 28 | 92 |
+| ErrorHandling | 17 | 27 |
 
-(Totals across labels exceed the 184 logic + 6 UI cases because tests carry several labels.)
+(Totals across labels exceed the 238 logic + 8 UI cases because tests carry several labels. The 95 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
 
 **Known gaps (stated, not hidden):**
 - **Accessibility: none.** REQ-NFR-04 isn't implemented or assessed yet; the
@@ -320,7 +467,20 @@ rows are labelled with each kind they contain.
 - **Usability is thin.** The two UI tests only check that messages are shown;
   the planned KLM benchmark for REQ-NFR-01 is not automated.
 - **Performance covers sign-in only.** The high-load E2E test in the milestone
-  plan does not exist yet.
+  plan does not exist yet. The build gate checks the sign-in budget on SQLite
+  only; the opt-in parity run also checks it on MySQL. Cloud-mode screen times
+  (some dashboards take several seconds over the internet) are not measured by
+  any test.
+- **MySQL parity is not in the build gate or CI.** It is opt-in, so a
+  MySQL-only regression is caught only when someone runs it (last run
+  2026-10-07, 95/95 passing).
+- **The real cloud path at launch is not automated.** `DatabaseSelectorTests`
+  simulate a reachable cloud with SQLite, and the UI tests only exercise the
+  local and unreachable cases. Launching against the real cloud database was
+  checked by hand (the cloud header appeared about 2.4 s after launch).
+- **Not tested:** the mid-session database-failure message
+  (`App.DispatcherUnhandledException`), and the build step that copies `.env`
+  next to the app.
 
 ### Running by label
 
@@ -328,6 +488,8 @@ rows are labelled with each kind they contain.
 dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Boundary"
 dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Security|TestCategory=ErrorHandling"
 dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Unit&TestCategory=InvalidInput"
+dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"    # what the build gate and CI run
+dotnet test PetSitters.Tests -c Debug --filter "TestCategory=MySql"     # parity run; needs the opt-in variable
 ```
 
 In Visual Studio, Test Explorer → **Group By → Traits** shows the same labels.
@@ -396,8 +558,30 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `ChatPersistenceTests` | `Message_IsPersisted_AndReadBackByAFreshRepository` | 1 | Smoke, Integration | Positive |
 | `ChatPersistenceTests` | `GetForBooking_ReturnsOnlyThatBookingsMessages` | 1 | Integration, Security | Negative |
 | `ChatPersistenceTests` | `GetForBooking_ReturnsMessagesInChronologicalOrder` | 1 | Integration | Positive |
+| `DatabaseConfigurationTests` | `EnvFile_ParsesKeyValuePairs_IgnoringCommentsAndBlanks` | 1 | Unit, Smoke | Positive |
+| `DatabaseConfigurationTests` | `EnvFile_ValueFormats` | 6 | Unit | Positive, Boundary |
+| `DatabaseConfigurationTests` | `EnvFile_MalformedLines_AreIgnored` | 1 | Unit | InvalidInput, ErrorHandling |
+| `DatabaseConfigurationTests` | `EnvFile_MissingFile_MeansNoSettings` | 1 | Unit | ErrorHandling |
+| `DatabaseConfigurationTests` | `AppConfig_EnvironmentVariable_OverridesEnvFile` | 1 | Unit | Positive |
+| `DatabaseConfigurationTests` | `AppConfig_DatabaseMode` | 6 | Unit | Positive, InvalidInput |
+| `DatabaseConfigurationTests` | `AppConfig_ConnectTimeout_IsBounded` | 5 | Unit | Boundary, InvalidInput |
+| `DatabaseConfigurationTests` | `AppConfig_NoUrl_MeansNoCloudDatabase` | 1 | Unit | Positive |
+| `DatabaseConfigurationTests` | `MySqlUrl_ParsesEveryPart` | 1 | Unit, Smoke | Positive |
+| `DatabaseConfigurationTests` | `MySqlUrl_NoPort_UsesMySqlDefault_AndNoSslMode_RequiresTls` | 1 | Unit | Boundary |
+| `DatabaseConfigurationTests` | `MySqlUrl_PercentEncodedCredentials_AreDecoded` | 1 | Unit | Positive |
+| `DatabaseConfigurationTests` | `MySqlUrl_SslModes` | 5 | Unit | Positive |
+| `DatabaseConfigurationTests` | `MySqlUrl_InvalidUrl_FailsWithoutLeakingThePassword` | 7 | Unit, Security | InvalidInput, ErrorHandling |
 | `DatabaseMigrationTests` | `Initialize_OnPreGr06Database_KeepsAllDataAndAllowsSecondRole` | 1 | Integration, Regression | Positive |
 | `DatabaseMigrationTests` | `Initialize_RunTwice_IsIdempotent` | 1 | Smoke, Integration, Regression | Positive |
+| `DatabaseSelectorTests` | `Select_CloudReachable_UsesCloud` | 1 | Integration, Smoke | Positive |
+| `DatabaseSelectorTests` | `Select_CloudUnreachable_FallsBackToLocal_AndExplains` | 1 | Integration, Smoke | Negative, ErrorHandling |
+| `DatabaseSelectorTests` | `Select_FailureAfterConnecting_IsReportedAsError_NotOffline` | 1 | Unit | ErrorHandling, Negative |
+| `DatabaseSelectorTests` | `IsConnectivityFailure_Classification` | 5 | Unit | Positive, Negative |
+| `DatabaseSelectorTests` | `Select_CloudFailureMessage_NeverContainsThePassword` | 1 | Unit, Security | ErrorHandling |
+| `DatabaseSelectorTests` | `Select_MalformedUrl_FallsBackToLocal` | 1 | Unit | InvalidInput, ErrorHandling |
+| `DatabaseSelectorTests` | `Select_ForcedLocal_NeverTriesTheCloud` | 1 | Unit | Positive |
+| `DatabaseSelectorTests` | `Select_NoUrl_UsesLocalWithoutWarning` | 1 | Unit | Positive |
+| `DatabaseSelectorTests` | `Redact_RemovesUrlAndPassword` | 2 | Unit, Security | Positive |
 | `PasswordHasherTests` | `CreateHash_ThenVerifyWithCorrectPassword_ReturnsTrue` | 1 | Smoke, Unit, Security | Positive |
 | `PasswordHasherTests` | `Verify_WithWrongPassword_ReturnsFalse` | 1 | Unit, Security | Negative |
 | `PasswordHasherTests` | `CreateHash_IsSalted_SamePasswordProducesDifferentHashes` | 1 | Unit, Security | Positive |
@@ -407,17 +591,17 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `PetAgeTests` | `FormatAge_CombinesYearsAndMonths` | 8 | Unit | Positive, Boundary |
 | `PetAgeTests` | `AgeDisplay_UsesTheStoredYearsAndMonths` | 1 | Unit | Positive |
 | `PetAgeTests` | `AgeMonths_DefaultsToZero_WhenNotSupplied` | 1 | Unit | Positive |
-| `RepositoryTests` | `Insert_AssignsId_AndCanBeFoundByEmailAndId` | 1 | Integration | Positive |
-| `RepositoryTests` | `EmailExists_IsCaseInsensitive` | 1 | Integration | Positive, Negative |
-| `RepositoryTests` | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | 1 | Integration | Positive |
-| `RepositoryTests` | `UpdateDetails_PersistsEditedFields` | 1 | Integration | Positive |
-| `RepositoryTests` | `Insert_ThenGetByOwner_ReturnsThePets` | 1 | Integration | Positive |
-| `RepositoryTests` | `Insert_PersistsYearsAndOptionalMonths` | 1 | Integration | Positive |
-| `RepositoryTests` | `Insert_DefaultsMonthsToZero_WhenNotSupplied` | 1 | Integration | Positive |
-| `RepositoryTests` | `Delete_RemovesOnlyTheSelectedPet` | 1 | Integration | Positive |
-| `RepositoryTests` | `Upsert_InsertsProfile_WhenNoneExists` | 1 | Integration | Positive |
-| `RepositoryTests` | `Upsert_UpdatesInPlace_WhenProfileAlreadyExists` | 1 | Integration | Positive |
-| `RepositoryTests` | `GetByUserId_ReturnsNull_WhenSitterHasNoProfileYet` | 1 | Integration | ErrorHandling |
+| `UserRepositoryTests` | `Insert_AssignsId_AndCanBeFoundByEmailAndId` | 1 | Integration | Positive |
+| `UserRepositoryTests` | `EmailExists_IsCaseInsensitive` | 1 | Integration | Positive, Negative |
+| `UserRepositoryTests` | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | 1 | Integration | Positive |
+| `UserRepositoryTests` | `UpdateDetails_PersistsEditedFields` | 1 | Integration | Positive |
+| `PetRepositoryTests` | `Insert_ThenGetByOwner_ReturnsThePets` | 1 | Integration | Positive |
+| `PetRepositoryTests` | `Insert_PersistsYearsAndOptionalMonths` | 1 | Integration | Positive |
+| `PetRepositoryTests` | `Insert_DefaultsMonthsToZero_WhenNotSupplied` | 1 | Integration | Positive |
+| `PetRepositoryTests` | `Delete_RemovesOnlyTheSelectedPet` | 1 | Integration | Positive |
+| `SitterProfileRepositoryTests` | `Upsert_InsertsProfile_WhenNoneExists` | 1 | Integration | Positive |
+| `SitterProfileRepositoryTests` | `Upsert_UpdatesInPlace_WhenProfileAlreadyExists` | 1 | Integration | Positive |
+| `SitterProfileRepositoryTests` | `GetByUserId_ReturnsNull_WhenSitterHasNoProfileYet` | 1 | Integration | ErrorHandling |
 | `SharedEmailTests` | `Register_SameEmailForTheOtherRole_Succeeds` | 2 | Integration | Positive |
 | `SharedEmailTests` | `Register_SameEmailSameRole_IsRejectedWithRoleSpecificWarning` | 2 | Integration | Negative |
 | `SharedEmailTests` | `Register_WhenBothRolesExist_RejectsEitherRole` | 1 | Integration | Negative |
@@ -428,6 +612,7 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `SharedEmailTests` | `Login_SharedEmailFailures_UseTheGenericMessage` | 1 | Integration, Security | Negative |
 | `SharedEmailTests` | `SharedEmail_AccountsAreSeparate` | 1 | Integration, Security | Positive |
 | `ValidationHelperTests` | `IsValidEmail_ClassifiesInputCorrectly` | 9 | Unit | Positive, Boundary, InvalidInput |
+| `ValidationHelperTests` | `IsValidEmail_EnforcesMaximumLengthBoundary` | 3 | Unit | Boundary, InvalidInput |
 | `ValidationHelperTests` | `IsValidPassword_EnforcesMinimumLengthBoundary` | 4 | Unit, Security | Positive, Boundary, InvalidInput |
 | `ValidationHelperTests` | `IsNonEmpty_DetectsBlankValues` | 4 | Unit | Positive, InvalidInput, ErrorHandling |
 | `ValidationHelperTests` | `TryParseRate_AcceptsOnlyNonNegativeNumbers` | 7 | Unit | Positive, Boundary, InvalidInput |
@@ -439,4 +624,6 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `UiRegressionTests` | `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | 1 | System, Acceptance, Regression | Positive, Negative |
 | `UiRegressionTests` | `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | 1 | System, Acceptance, Usability, Regression | Positive, Negative |
 | `UiRegressionTests` | `BookingForm_InvalidRequests_AreRejectedWithSpecificMessages` | 1 | System, Acceptance, Usability, Regression | Positive, Boundary, InvalidInput |
+| `UiRegressionTests` | `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | 1 | System, Acceptance, Regression | ErrorHandling, Negative |
+| `UiRegressionTests` | `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` | 1 | System, Regression | Positive |
 | `UiRegressionTests` | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | 1 | System, Security, Regression | Negative, ErrorHandling |

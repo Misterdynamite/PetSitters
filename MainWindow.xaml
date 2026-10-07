@@ -12,24 +12,37 @@
     <DockPanel>
         <!-- Top header (unified with LoginView header) -->
         <Border DockPanel.Dock="Top" Background="{StaticResource LoginPaletteDark}" Height="72">
+            <!-- Two columns, so the right-hand status/session area never draws over the
+                 logo at the default 920 px width; the logo column gives way instead. -->
             <Grid>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0" ClipToBounds="True">
                     <TextBlock Text="🐾" FontSize="28" VerticalAlignment="Center" Foreground="{StaticResource LoginPalettePale}"/>
                     <TextBlock Text="Sitters4Us" FontFamily="/PetSitters;component/Assets/Fonts/#Fredoka" FontSize="36" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{StaticResource LoginPalettePale}" FontWeight="Bold"/>
                     <Image Source="/Assets/Images/Paw2.png" Height="56" Width="336" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel x:Name="SessionBar" Orientation="Horizontal" HorizontalAlignment="Right"
-                            VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,20,0">
-                    <TextBlock x:Name="SessionText" Foreground="{StaticResource LoginPalettePale}" VerticalAlignment="Center"
-                               Margin="0,0,12,0"/>
-                    <Button x:Name="LogoutButton" Content="Log out" Style="{StaticResource SecondaryButton}"
-                            Click="LogoutButton_Click"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
+                    <!-- Which database is in use (cloud MySQL or local SQLite fallback); the reason is in the tooltip. -->
+                    <TextBlock x:Name="StorageStatus" Text="Connecting…" Foreground="{StaticResource LoginPalettePale}"
+                               VerticalAlignment="Center" Margin="0,0,16,0" FontWeight="SemiBold"
+                               ToolTipService.ShowDuration="20000"/>
+                    <StackPanel x:Name="SessionBar" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock x:Name="SessionText" Foreground="{StaticResource LoginPalettePale}" VerticalAlignment="Center"
+                                   Margin="0,0,12,0"/>
+                        <Button x:Name="LogoutButton" Content="Log out" Style="{StaticResource SecondaryButton}"
+                                Click="LogoutButton_Click"/>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Active view is swapped in here -->
+        <!-- Active view is swapped in here. Until the database is ready it shows the connecting message. -->
         <ContentControl x:Name="RootContent">
+            <TextBlock x:Name="ConnectingText" Text="Connecting to the database…" FontSize="18"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
         </ContentControl>
     </DockPanel>
 </Window>

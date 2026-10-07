@@ -1,36 +1,83 @@
 using System;
+using System.Data.Common;
 using System.Data.SQLite;
 using System.IO;
+using MySqlConnector;
 
 namespace PetSitters.Data
 {
     /// <summary>
-    /// Owns the SQLite connection string and creates the schema on first run.
-    /// The database file path is injectable so automated tests can point at a
-    /// throwaway temp file (or ":memory:") instead of the real AppData store.
+    /// Owns the connection settings for ONE database (local SQLite file or the
+    /// shared MySQL server) and creates its schema. Repositories only see
+    /// provider-neutral <see cref="DbConnection"/>s plus <see cref="Dialect"/>,
+    /// so the same queries run on both engines. Which engine the app uses is
+    /// decided once at launch by <c>Services.DatabaseSelector</c>: MySQL first,
+    /// SQLite if MySQL can't be reached.
+    /// The SQLite path is injectable so automated tests can point at a throwaway
+    /// temp file instead of the real AppData store.
     /// </summary>
     public class Database
     {
         private readonly string _connectionString;
 
-        /// <summary>Full path to the .db file (or ":memory:").</summary>
+        // Initialize() runs its DDL once per instance: the startup check calls it
+        // to prove the server is reachable, and AppServices calls it again, which
+        // would otherwise cost the cloud database an extra round trip.
+        private bool _initialized;
+
+        /// <summary>The engine this instance talks to.</summary>
+        public DatabaseProvider Provider { get; }
+
+        /// <summary>
+        /// Where the data lives, for display and diagnostics: the .db file path
+        /// for SQLite, or "server:port/database" for MySQL. Never contains credentials.
+        /// </summary>
         public string DataSource { get; }
 
+        /// <summary>The SQL fragments that differ between the two engines.</summary>
+        internal SqlDialect Dialect { get; }
+
+        /// <summary>A SQLite database stored in the file at <paramref name="dataSource"/> (or ":memory:").</summary>
         public Database(string dataSource)
         {
             if (string.IsNullOrWhiteSpace(dataSource))
                 throw new ArgumentException("Data source is required.", nameof(dataSource));
 
+            Provider = DatabaseProvider.Sqlite;
+            Dialect = SqlDialect.Sqlite;
             DataSource = dataSource;
             // ForeignKeys=True enforces our FK relationships at the engine level.
             _connectionString = "Data Source=" + dataSource + ";Version=3;ForeignKeys=True;";
         }
 
+        private Database(string mySqlConnectionString, string displayName)
+        {
+            Provider = DatabaseProvider.MySql;
+            Dialect = SqlDialect.MySql;
+            DataSource = displayName;
+            _connectionString = mySqlConnectionString;
+        }
+
         /// <summary>
-        /// Builds a Database pointing at %AppData%\PetSitters\petsitters.db,
-        /// creating the folder if needed. This is what the running app uses.
+        /// A MySQL database reached through <paramref name="connectionString"/>
+        /// (build one from a mysql:// URL with <see cref="MySqlUrl.ToConnectionString"/>).
+        /// Nothing connects until the first query or <see cref="Initialize"/>.
         /// </summary>
-        public static Database CreateDefault()
+        public static Database ForMySql(string connectionString)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new ArgumentException("A MySQL connection string is required.", nameof(connectionString));
+
+            var settings = new MySqlConnectionStringBuilder(connectionString);
+            return new Database(connectionString, settings.Server + ":" + settings.Port + "/" + settings.Database);
+        }
+
+        /// <summary>
+        /// The local SQLite store at %AppData%\PetSitters\petsitters.db, creating
+        /// the folder if needed. Used when no cloud database is configured or it
+        /// can't be reached at launch.
+        /// </summary>
+        public static Database CreateLocalSqlite()
         {
             string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string folder = Path.Combine(appData, "PetSitters");
@@ -39,18 +86,48 @@ namespace PetSitters.Data
             return new Database(dbPath);
         }
 
-        /// <summary>Opens a fresh, already-open connection. Caller disposes it.</summary>
-        public SQLiteConnection OpenConnection()
+        /// <summary>
+        /// Opens a fresh, already-open connection. Caller disposes it. For MySQL
+        /// this normally reuses a pooled connection (see <see cref="MySqlUrl"/>),
+        /// so it doesn't repeat the TLS handshake every time.
+        /// </summary>
+        public DbConnection OpenConnection()
         {
-            var connection = new SQLiteConnection(_connectionString);
-            connection.Open();
+            DbConnection connection = Provider == DatabaseProvider.Sqlite
+                ? (DbConnection)new SQLiteConnection(_connectionString)
+                : new MySqlConnection(_connectionString);
+            try
+            {
+                connection.Open();
+            }
+            catch
+            {
+                connection.Dispose();
+                throw;
+            }
             return connection;
         }
 
         /// <summary>
-        /// Creates all tables if they do not yet exist. Safe to call on every startup.
+        /// Creates all tables if they don't exist yet, and brings older local
+        /// databases up to date. Safe to call on every startup, and only does the
+        /// work once per instance. For MySQL this is also the launch-time proof
+        /// that the server is reachable: it throws if it isn't.
         /// </summary>
         public void Initialize()
+        {
+            if (_initialized)
+                return;
+
+            if (Provider == DatabaseProvider.Sqlite)
+                InitializeSqlite();
+            else
+                InitializeMySql();
+
+            _initialized = true;
+        }
+
+        private void InitializeSqlite()
         {
             using (var connection = OpenConnection())
             using (var command = connection.CreateCommand())
@@ -118,6 +195,119 @@ CREATE TABLE IF NOT EXISTS ChatMessages (
         }
 
         /// <summary>
+        /// The MySQL schema: the same tables, columns and keys as SQLite, in
+        /// MySQL's types. Decisions:
+        /// - Email is VARCHAR(255): MySQL can't put a UNIQUE index on TEXT.
+        ///   (ValidationHelper.IsValidEmail caps emails at 254 characters, the RFC
+        ///   maximum, so STRICT mode never rejects a valid one.)
+        ///   Other free text is TEXT (64 KB), and the multi-line fields (notes, bios,
+        ///   messages, availability, ...) are MEDIUMTEXT (16 MB). The server runs in
+        ///   STRICT mode, which REJECTS over-long values rather than truncating them,
+        ///   and the UI sets no length limits, so a pasted wall of text must still fit.
+        /// - Dates stay ISO-8601 round-trip strings (VARCHAR(40)), exactly as in
+        ///   SQLite, so both engines share the repositories' read/write code, and
+        ///   ORDER BY on them still sorts chronologically.
+        /// - Money is DECIMAL(10,2), not floating point.
+        /// - Collation utf8mb4_0900_as_ci: case-insensitive (so the email + role
+        ///   uniqueness matches SQLite's COLLATE NOCASE) but accent-sensitive, so
+        ///   "jose@" and "josé@" stay different, like SQLite.
+        /// - Every table has a PRIMARY KEY (the server enforces sql_require_primary_key).
+        /// All CREATE statements go in ONE command, one round trip instead of five,
+        /// and run only when the existence check finds any of the five tables
+        /// missing (normally just the first launch).
+        /// </summary>
+        private void InitializeMySql()
+        {
+            const string table = " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_as_ci;";
+            using (var connection = OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                // Create only when something is missing. On a normal launch this is
+                // the single round trip. It also lets the app run under a
+                // least-privilege database user (SELECT/INSERT/UPDATE/DELETE only):
+                // MySQL checks the CREATE privilege even for CREATE TABLE IF NOT
+                // EXISTS on a table that exists. Table names are case-sensitive on
+                // this server (lower_case_table_names=0), as written here.
+                command.CommandText =
+                    "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() " +
+                    "AND TABLE_NAME IN ('Users', 'SitterProfiles', 'Pets', 'Bookings', 'ChatMessages');";
+                if (Convert.ToInt32(command.ExecuteScalar()) == 5)
+                    return;
+
+                command.CommandText = @"
+CREATE TABLE IF NOT EXISTS Users (
+    Id               INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    Email            VARCHAR(255) NOT NULL,
+    PasswordHash     VARCHAR(255) NOT NULL,
+    PasswordSalt     VARCHAR(255) NOT NULL,
+    Role             INT          NOT NULL,
+    FullName         TEXT         NOT NULL,
+    Phone            TEXT         NULL,
+    Location         TEXT         NULL,
+    ProfileImagePath TEXT         NULL,
+    CreatedUtc       VARCHAR(40)  NOT NULL,
+    UNIQUE KEY UX_Users_Email_Role (Email, Role)
+)" + table + @"
+
+CREATE TABLE IF NOT EXISTS SitterProfiles (
+    Id               INT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    UserId           INT           NOT NULL,
+    Availability     MEDIUMTEXT    NULL,
+    ExperienceYears  INT           NOT NULL DEFAULT 0,
+    Preferences      MEDIUMTEXT    NULL,
+    Qualifications   MEDIUMTEXT    NULL,
+    DailyRate        DECIMAL(10,2) NOT NULL DEFAULT 0,
+    Bio              MEDIUMTEXT    NULL,
+    UNIQUE KEY UX_SitterProfiles_UserId (UserId),
+    CONSTRAINT FK_SitterProfiles_User FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE
+)" + table + @"
+
+CREATE TABLE IF NOT EXISTS Pets (
+    Id           INT  NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    OwnerUserId  INT  NOT NULL,
+    Name         TEXT NOT NULL,
+    Species      TEXT NULL,
+    Breed        TEXT NULL,
+    Age          INT  NOT NULL DEFAULT 0,
+    AgeMonths    INT  NOT NULL DEFAULT 0,
+    ImagePath    TEXT NULL,
+    Notes        MEDIUMTEXT NULL,
+    CONSTRAINT FK_Pets_Owner FOREIGN KEY (OwnerUserId) REFERENCES Users(Id) ON DELETE CASCADE
+)" + table + @"
+
+CREATE TABLE IF NOT EXISTS Bookings (
+    Id                  INT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    OwnerUserId         INT           NOT NULL,
+    SitterUserId        INT           NOT NULL,
+    PetId               INT           NULL,
+    StartDate           VARCHAR(40)   NOT NULL,
+    EndDate             VARCHAR(40)   NOT NULL,
+    Message             MEDIUMTEXT    NULL,
+    Status              INT           NOT NULL DEFAULT 0,
+    DailyRateAtBooking  DECIMAL(10,2) NOT NULL DEFAULT 0,
+    CreatedUtc          VARCHAR(40)   NOT NULL,
+    CONSTRAINT FK_Bookings_Owner  FOREIGN KEY (OwnerUserId)  REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Bookings_Sitter FOREIGN KEY (SitterUserId) REFERENCES Users(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_Bookings_Pet    FOREIGN KEY (PetId)        REFERENCES Pets(Id)  ON DELETE SET NULL
+)" + table + @"
+
+CREATE TABLE IF NOT EXISTS ChatMessages (
+    Id            INT         NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    BookingId     INT         NOT NULL,
+    SenderUserId  INT         NOT NULL,
+    MessageText   MEDIUMTEXT  NOT NULL,
+    CreatedUtc    VARCHAR(40) NOT NULL,
+    CONSTRAINT FK_ChatMessages_Booking FOREIGN KEY (BookingId)    REFERENCES Bookings(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_ChatMessages_Sender  FOREIGN KEY (SenderUserId) REFERENCES Users(Id)    ON DELETE CASCADE
+)" + table;
+                command.ExecuteNonQuery();
+            }
+            // No MySQL migrations yet: the MySQL schema started at the current
+            // version. When it changes, add idempotent steps here (check
+            // information_schema.COLUMNS / STATISTICS first, like ApplyMigrations does for SQLite).
+        }
+
+        /// <summary>
         /// The Users table definition, shared by first-run creation and the
         /// REQ-GR-06 rebuild so the two can never drift apart.
         /// <paramref name="nameClause"/> is a hard-coded literal ("IF NOT EXISTS
@@ -145,9 +335,11 @@ CREATE TABLE " + nameClause + @" (
         }
 
         /// <summary>
-        /// Brings an existing database up to date. "CREATE TABLE IF NOT EXISTS"
-        /// only helps on a fresh file, so columns added after a release must be
-        /// patched in here. Every step is idempotent and safe to re-run.
+        /// Brings an existing SQLITE database up to date (SQLite only: it uses
+        /// PRAGMAs, and the MySQL schema started at the current version).
+        /// "CREATE TABLE IF NOT EXISTS" only helps on a fresh file, so columns
+        /// added after a release must be patched in here. Every step is
+        /// idempotent and safe to re-run.
         /// </summary>
         private void ApplyMigrations()
         {
@@ -252,13 +444,13 @@ CREATE TABLE " + nameClause + @" (
                 Execute(connection, "PRAGMA foreign_keys = OFF;");   // no-op inside a transaction, so set first
                 try
                 {
-                    using (var transaction = connection.BeginTransaction())
+                    using (DbTransaction transaction = connection.BeginTransaction())
                     {
-                        Execute(connection, "DROP TABLE IF EXISTS Users_new;");
-                        Execute(connection, UsersTableSql("Users_new"));
-                        Execute(connection, "INSERT INTO Users_new (" + columns + ") SELECT " + columns + " FROM Users;");
-                        Execute(connection, "DROP TABLE Users;");
-                        Execute(connection, "ALTER TABLE Users_new RENAME TO Users;");
+                        Execute(connection, "DROP TABLE IF EXISTS Users_new;", transaction);
+                        Execute(connection, UsersTableSql("Users_new"), transaction);
+                        Execute(connection, "INSERT INTO Users_new (" + columns + ") SELECT " + columns + " FROM Users;", transaction);
+                        Execute(connection, "DROP TABLE Users;", transaction);
+                        Execute(connection, "ALTER TABLE Users_new RENAME TO Users;", transaction);
                         transaction.Commit();
                     }
                 }
@@ -269,11 +461,17 @@ CREATE TABLE " + nameClause + @" (
             }
         }
 
-        /// <summary>Runs one hard-coded statement on an open connection.</summary>
-        private static void Execute(SQLiteConnection connection, string sql)
+        /// <summary>
+        /// Runs one hard-coded statement on an open connection, inside
+        /// <paramref name="transaction"/> when given. The transaction is set
+        /// explicitly: SQLite would pick it up implicitly, but MySqlConnector
+        /// rejects a command that doesn't name the connection's open transaction.
+        /// </summary>
+        private static void Execute(DbConnection connection, string sql, DbTransaction transaction = null)
         {
             using (var command = connection.CreateCommand())
             {
+                command.Transaction = transaction;
                 command.CommandText = sql;
                 command.ExecuteNonQuery();
             }

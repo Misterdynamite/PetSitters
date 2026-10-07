@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
+using System.Data.Common;
 using PetSitters.Models;
 
 namespace PetSitters.Data
@@ -23,15 +23,15 @@ namespace PetSitters.Data
                 command.CommandText = @"
 INSERT INTO Pets (OwnerUserId, Name, Species, Breed, Age, AgeMonths, ImagePath, Notes)
 VALUES (@owner, @name, @species, @breed, @age, @ageMonths, @image, @notes);
-SELECT last_insert_rowid();";
-                command.Parameters.AddWithValue("@owner", pet.OwnerUserId);
-                command.Parameters.AddWithValue("@name", pet.Name);
-                command.Parameters.AddWithValue("@species", (object)pet.Species ?? DBNull.Value);
-                command.Parameters.AddWithValue("@breed", (object)pet.Breed ?? DBNull.Value);
-                command.Parameters.AddWithValue("@age", pet.Age);
-                command.Parameters.AddWithValue("@ageMonths", pet.AgeMonths);
-                command.Parameters.AddWithValue("@notes", (object)pet.Notes ?? DBNull.Value);
-                command.Parameters.AddWithValue("@image", (object)pet.ImagePath ?? DBNull.Value);
+" + _db.Dialect.SelectLastInsertId;
+                command.AddParameter("@owner", pet.OwnerUserId);
+                command.AddParameter("@name", pet.Name);
+                command.AddParameter("@species", (object)pet.Species ?? DBNull.Value);
+                command.AddParameter("@breed", (object)pet.Breed ?? DBNull.Value);
+                command.AddParameter("@age", pet.Age);
+                command.AddParameter("@ageMonths", pet.AgeMonths);
+                command.AddParameter("@notes", (object)pet.Notes ?? DBNull.Value);
+                command.AddParameter("@image", (object)pet.ImagePath ?? DBNull.Value);
                 pet.Id = Convert.ToInt32(command.ExecuteScalar());
                 return pet;
             }
@@ -43,7 +43,7 @@ SELECT last_insert_rowid();";
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "DELETE FROM Pets WHERE Id = @id;";
-                command.Parameters.AddWithValue("@id", petId);
+                command.AddParameter("@id", petId);
                 command.ExecuteNonQuery();
             }
         }
@@ -54,8 +54,8 @@ SELECT last_insert_rowid();";
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM Pets WHERE OwnerUserId = @owner ORDER BY Name COLLATE NOCASE;";
-                command.Parameters.AddWithValue("@owner", ownerUserId);
+                command.CommandText = "SELECT * FROM Pets WHERE OwnerUserId = @owner ORDER BY " + _db.Dialect.OrderByIgnoringCase("Name") + ";";
+                command.AddParameter("@owner", ownerUserId);
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -65,7 +65,7 @@ SELECT last_insert_rowid();";
             return pets;
         }
 
-        private static Pet Map(SQLiteDataReader reader)
+        private static Pet Map(DbDataReader reader)
         {
                 return new Pet
             {

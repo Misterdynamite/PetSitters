@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
+using System.Data.Common;
 using System.Globalization;
 using PetSitters.Models;
 
@@ -23,7 +23,7 @@ namespace PetSitters.Data
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT COUNT(1) FROM Users WHERE Email = @email;";
-                command.Parameters.AddWithValue("@email", email);
+                command.AddParameter("@email", email);
                 long count = Convert.ToInt64(command.ExecuteScalar());
                 return count > 0;
             }
@@ -39,8 +39,8 @@ namespace PetSitters.Data
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT COUNT(1) FROM Users WHERE Email = @email AND Role = @role;";
-                command.Parameters.AddWithValue("@email", email);
-                command.Parameters.AddWithValue("@role", (int)role);
+                command.AddParameter("@email", email);
+                command.AddParameter("@role", (int)role);
                 long count = Convert.ToInt64(command.ExecuteScalar());
                 return count > 0;
             }
@@ -57,7 +57,7 @@ namespace PetSitters.Data
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Users WHERE Email = @email ORDER BY Id;";
-                command.Parameters.AddWithValue("@email", email);
+                command.AddParameter("@email", email);
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -76,15 +76,15 @@ namespace PetSitters.Data
                 command.CommandText = @"
 INSERT INTO Users (Email, PasswordHash, PasswordSalt, Role, FullName, Phone, Location, CreatedUtc)
 VALUES (@email, @hash, @salt, @role, @name, @phone, @location, @created);
-SELECT last_insert_rowid();";
-                command.Parameters.AddWithValue("@email", user.Email);
-                command.Parameters.AddWithValue("@hash", user.PasswordHash);
-                command.Parameters.AddWithValue("@salt", user.PasswordSalt);
-                command.Parameters.AddWithValue("@role", (int)user.Role);
-                command.Parameters.AddWithValue("@name", user.FullName);
-                command.Parameters.AddWithValue("@phone", (object)user.Phone ?? DBNull.Value);
-                command.Parameters.AddWithValue("@location", (object)user.Location ?? DBNull.Value);
-                command.Parameters.AddWithValue("@created", user.CreatedUtc.ToString("o", CultureInfo.InvariantCulture));
+" + _db.Dialect.SelectLastInsertId;
+                command.AddParameter("@email", user.Email);
+                command.AddParameter("@hash", user.PasswordHash);
+                command.AddParameter("@salt", user.PasswordSalt);
+                command.AddParameter("@role", (int)user.Role);
+                command.AddParameter("@name", user.FullName);
+                command.AddParameter("@phone", (object)user.Phone ?? DBNull.Value);
+                command.AddParameter("@location", (object)user.Location ?? DBNull.Value);
+                command.AddParameter("@created", user.CreatedUtc.ToString("o", CultureInfo.InvariantCulture));
 
                 user.Id = Convert.ToInt32(command.ExecuteScalar());
                 return user;
@@ -101,11 +101,11 @@ SELECT last_insert_rowid();";
 UPDATE Users
 SET FullName = @name, Phone = @phone, Location = @location, ProfileImagePath = @image
 WHERE Id = @id;";
-                command.Parameters.AddWithValue("@name", user.FullName);
-                command.Parameters.AddWithValue("@phone", (object)user.Phone ?? DBNull.Value);
-                command.Parameters.AddWithValue("@location", (object)user.Location ?? DBNull.Value);
-                command.Parameters.AddWithValue("@image", (object)user.ProfileImagePath ?? DBNull.Value);
-                command.Parameters.AddWithValue("@id", user.Id);
+                command.AddParameter("@name", user.FullName);
+                command.AddParameter("@phone", (object)user.Phone ?? DBNull.Value);
+                command.AddParameter("@location", (object)user.Location ?? DBNull.Value);
+                command.AddParameter("@image", (object)user.ProfileImagePath ?? DBNull.Value);
+                command.AddParameter("@id", user.Id);
                 command.ExecuteNonQuery();
             }
         }
@@ -121,7 +121,7 @@ WHERE Id = @id;";
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Users WHERE Email = @email ORDER BY Id LIMIT 1;";
-                command.Parameters.AddWithValue("@email", email);
+                command.AddParameter("@email", email);
                 using (var reader = command.ExecuteReader())
                 {
                     return reader.Read() ? Map(reader) : null;
@@ -135,7 +135,7 @@ WHERE Id = @id;";
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Users WHERE Id = @id LIMIT 1;";
-                command.Parameters.AddWithValue("@id", id);
+                command.AddParameter("@id", id);
                 using (var reader = command.ExecuteReader())
                 {
                     return reader.Read() ? Map(reader) : null;
@@ -150,8 +150,8 @@ WHERE Id = @id;";
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "SELECT * FROM Users WHERE Role = @role ORDER BY FullName COLLATE NOCASE;";
-                command.Parameters.AddWithValue("@role", (int)role);
+                command.CommandText = "SELECT * FROM Users WHERE Role = @role ORDER BY " + _db.Dialect.OrderByIgnoringCase("FullName") + ";";
+                command.AddParameter("@role", (int)role);
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -161,7 +161,7 @@ WHERE Id = @id;";
             return users;
         }
 
-        private static User Map(SQLiteDataReader reader)
+        private static User Map(DbDataReader reader)
         {
             return new User
             {

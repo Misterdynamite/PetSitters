@@ -1,5 +1,5 @@
 using System;
-using System.Data.SQLite;
+using System.Data.Common;
 using PetSitters.Models;
 
 namespace PetSitters.Data
@@ -20,7 +20,7 @@ namespace PetSitters.Data
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM SitterProfiles WHERE UserId = @userId LIMIT 1;";
-                command.Parameters.AddWithValue("@userId", userId);
+                command.AddParameter("@userId", userId);
                 using (var reader = command.ExecuteReader())
                 {
                     return reader.Read() ? Map(reader) : null;
@@ -34,28 +34,26 @@ namespace PetSitters.Data
             using (var connection = _db.OpenConnection())
             using (var command = connection.CreateCommand())
             {
+                // One profile per sitter (UNIQUE UserId): insert, or update it in
+                // place. The upsert clause is engine-specific (see SqlDialect.Upsert).
                 command.CommandText = @"
 INSERT INTO SitterProfiles (UserId, Availability, ExperienceYears, Preferences, Qualifications, DailyRate, Bio)
-VALUES (@userId, @availability, @exp, @prefs, @quals, @rate, @bio)
-ON CONFLICT(UserId) DO UPDATE SET
-    Availability    = excluded.Availability,
-    ExperienceYears = excluded.ExperienceYears,
-    Preferences     = excluded.Preferences,
-    Qualifications  = excluded.Qualifications,
-    DailyRate       = excluded.DailyRate,
-    Bio             = excluded.Bio;";
-                command.Parameters.AddWithValue("@userId", profile.UserId);
-                command.Parameters.AddWithValue("@availability", (object)profile.Availability ?? DBNull.Value);
-                command.Parameters.AddWithValue("@exp", profile.ExperienceYears);
-                command.Parameters.AddWithValue("@prefs", (object)profile.Preferences ?? DBNull.Value);
-                command.Parameters.AddWithValue("@quals", (object)profile.Qualifications ?? DBNull.Value);
-                command.Parameters.AddWithValue("@rate", profile.DailyRate);
-                command.Parameters.AddWithValue("@bio", (object)profile.Bio ?? DBNull.Value);
+VALUES (@userId, @availability, @exp, @prefs, @quals, @rate, @bio)"
+                    + _db.Dialect.Upsert("UserId",
+                        "Availability", "ExperienceYears", "Preferences", "Qualifications", "DailyRate", "Bio")
+                    + ";";
+                command.AddParameter("@userId", profile.UserId);
+                command.AddParameter("@availability", (object)profile.Availability ?? DBNull.Value);
+                command.AddParameter("@exp", profile.ExperienceYears);
+                command.AddParameter("@prefs", (object)profile.Preferences ?? DBNull.Value);
+                command.AddParameter("@quals", (object)profile.Qualifications ?? DBNull.Value);
+                command.AddParameter("@rate", profile.DailyRate);
+                command.AddParameter("@bio", (object)profile.Bio ?? DBNull.Value);
                 command.ExecuteNonQuery();
             }
         }
 
-        private static SitterProfile Map(SQLiteDataReader reader)
+        private static SitterProfile Map(DbDataReader reader)
         {
             return new SitterProfile
             {

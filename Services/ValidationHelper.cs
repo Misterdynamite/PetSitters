@@ -14,9 +14,18 @@ namespace PetSitters.Services
 
         public const int MinPasswordLength = 6;
 
+        /// <summary>
+        /// Longest email accepted: 254 characters, the RFC 5321 maximum. Also the
+        /// guarantee the MySQL schema relies on (Email is VARCHAR(255) because it's
+        /// part of a UNIQUE key, and the server's STRICT mode rejects longer values).
+        /// </summary>
+        public const int MaxEmailLength = 254;
+
         public static bool IsValidEmail(string email)
         {
-            return !string.IsNullOrWhiteSpace(email) && EmailRegex.IsMatch(email.Trim());
+            return !string.IsNullOrWhiteSpace(email) &&
+                   email.Trim().Length <= MaxEmailLength &&
+                   EmailRegex.IsMatch(email.Trim());
         }
 
         /// <summary>Minimum password rule for the prototype: at least 6 characters.</summary>

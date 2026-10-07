@@ -24,10 +24,12 @@ namespace PetSitters.UiTests
     ///   REQ-PO-08 same-pet double booking refused, REQ-PO-07 owner cancels
     ///     (SamePetDoubleBooking_* test; the journey also cancels an accepted booking)
     ///   REQ-GR-06 one account per email per role; login asks which (SharedEmail_* test)
+    ///   REQ-GR-09 cloud database with local fallback; header says which (Startup_* tests)
     ///   REQ-GR-04 booking form validation messages (BookingForm_* test)
     ///
-    /// Not covered: FR-O5 (owner-side chat) is not implemented in the app yet, so
-    /// the journey only exercises chat from the sitter side.
+    /// Partly covered: FR-O5 (owner-side chat) works in the app, but this suite
+    /// sends messages only from the sitter side; the owner's Chats tab is checked
+    /// only to confirm a cancelled booking leaves it.
     ///
     /// Regression guards - specific breakages this suite exists to catch, each of
     /// which has bitten this project before:
@@ -363,6 +365,56 @@ namespace PetSitters.UiTests
             _app.SelectTab("My Bookings");
             Assert.AreEqual(1, _app.CountListItems("BookingsList"),
                 "Only the valid request should have been saved.");
+        }
+
+        /// <summary>
+        /// Cloud database with local fallback, through the real app: launched with
+        /// a DATABASE_URL that can't be reached (a closed port on this machine, so
+        /// the real cloud server is never contacted), the app must still open,
+        /// tell the user it's offline on the local database, and be fully usable.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Regression")]
+        [TestCategory("ErrorHandling")]
+        [TestCategory("Negative")]
+        [TestCategory("EndToEnd")]
+        [TestProperty("Requirements", "REQ-GR-09")]
+        public void Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo()
+        {
+            Step("Relaunch with a cloud database URL that refuses connections");
+            _app.Dispose();
+            _app = new PetSittersDriver(AppLocator.FindExecutable(), new System.Collections.Generic.Dictionary<string, string>
+            {
+                ["PETSITTERS_DB"] = "auto",   // undo the driver's default "sqlite" so the cloud is attempted
+                ["DATABASE_URL"] = "mysql://nobody:not-a-real-password@127.0.0.1:1/sitters4us",
+                ["DB_CONNECT_TIMEOUT_SECONDS"] = "3",
+            });
+
+            _app.ByName("EmailBox");   // waits until the login screen has replaced "Connecting…"
+            StringAssert.Contains(_app.ReadText("StorageStatus"), "Offline: local database",
+                "The header should say the app fell back to the local database.");
+
+            Step("The app still works offline: register on the local database");
+            RegisterOwner();
+        }
+
+        /// <summary>
+        /// With the cloud database switched off (PETSITTERS_DB=sqlite, as every
+        /// other UI test runs), the header says the local database is in use and
+        /// doesn't wrongly claim to be offline.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Regression")]
+        [TestCategory("Positive")]
+        [TestProperty("Requirements", "REQ-GR-09")]
+        public void Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase()
+        {
+            _app.ByName("EmailBox");
+            Assert.AreEqual("Local database", _app.ReadText("StorageStatus"),
+                "When the local database is chosen deliberately, the header should say so plainly.");
         }
 
         /// <summary>

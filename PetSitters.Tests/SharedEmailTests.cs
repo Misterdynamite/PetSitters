@@ -86,7 +86,15 @@ namespace PetSitters.Tests
                 Role = UserRole.Owner, FullName = "Dup", CreatedUtc = System.DateTime.UtcNow
             };
 
-            Assert.ThrowsException<System.Data.SQLite.SQLiteException>(() => Services.Users.Insert(duplicate));
+            // Each engine throws its own exception type (SQLiteException /
+            // MySqlException), and MSTest's ThrowsException<T> matches the exact
+            // type only, so catch the common base class instead.
+            System.Data.Common.DbException rejected = null;
+            try { Services.Users.Insert(duplicate); }
+            catch (System.Data.Common.DbException ex) { rejected = ex; }
+
+            Assert.IsNotNull(rejected, "The database must refuse a second account with the same email and role.");
+            Assert.AreEqual(1, Services.Users.FindAllByEmail(Email).Count, "No duplicate row may have been written.");
         }
 
         // ---- login ----

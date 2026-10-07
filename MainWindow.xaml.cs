@@ -12,13 +12,36 @@ namespace PetSitters
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly AppServices _services;
+        private AppServices _services;
 
-        public MainWindow(AppServices services)
+        /// <summary>
+        /// Opens in the "connecting" state (see RootContent in the XAML): the
+        /// database is chosen in the background, then <see cref="Attach"/> is called.
+        /// </summary>
+        public MainWindow()
         {
             InitializeComponent();
+        }
+
+        /// <summary>Called once the database is ready: shows which one is in use, then the login screen.</summary>
+        public void Attach(AppServices services)
+        {
             _services = services;
+            ShowStorageStatus(services.Storage);
             ShowLogin();
+        }
+
+        /// <summary>
+        /// The header indicator. It matters because the local fallback doesn't
+        /// sync: on the fallback, nothing the user does is visible to anyone else,
+        /// so it's shown in a warning colour with the reason in the tooltip.
+        /// </summary>
+        private void ShowStorageStatus(DatabaseSelection storage)
+        {
+            StorageStatus.Text = (storage.UsingCloud ? "☁ " : storage.FellBack ? "⚠ " : "") + storage.Summary;
+            StorageStatus.ToolTip = storage.Detail;
+            if (storage.FellBack)
+                StorageStatus.Foreground = (System.Windows.Media.Brush)FindResource("Warning");
         }
 
         /// <summary>Replaces the whole content area with the given view.</summary>

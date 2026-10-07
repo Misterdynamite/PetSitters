@@ -48,6 +48,11 @@
                 <TextBlock Text="Welcome back" FontFamily="/PetSitters;component/Assets/Fonts/#Fredoka" FontSize="24" HorizontalAlignment="Center" FontWeight="Bold" Foreground="White"/>
                 <TextBlock Text="Log in to find or offer pet sitting." FontSize="15" HorizontalAlignment="Center" Foreground="White" Opacity="0.85" Margin="0,6,0,14"/>
 
+                <!-- Shown only when the cloud database couldn't be reached at launch (local fallback). -->
+                <TextBlock x:Name="OfflineNotice" Visibility="Collapsed" TextWrapping="Wrap" Width="340"
+                           Foreground="{StaticResource Warning}" FontWeight="SemiBold" Margin="0,0,0,8"
+                           Text="Offline: this computer's local database is in use. Accounts from the cloud database won't work here, and anything you create won't be shared. Restart the app when you're back online."/>
+
                 <TextBlock Text="Email" FontSize="16" FontFamily="/PetSitters;component/Assets/Fonts/#Fredoka" Foreground="White" HorizontalAlignment="Left" Margin="0,6,0,6"/>
                 <TextBox x:Name="EmailBox" Style="{StaticResource LoginInputStyle}" HorizontalAlignment="Center"/>
 

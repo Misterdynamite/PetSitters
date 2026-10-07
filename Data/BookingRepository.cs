@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SQLite;
+using System.Data.Common;
 using System.Globalization;
 using PetSitters.Models;
 
@@ -28,16 +28,16 @@ namespace PetSitters.Data
                 command.CommandText = @"
 INSERT INTO Bookings (OwnerUserId, SitterUserId, PetId, StartDate, EndDate, Message, Status, DailyRateAtBooking, CreatedUtc)
 VALUES (@owner, @sitter, @pet, @start, @end, @message, @status, @rate, @created);
-SELECT last_insert_rowid();";
-                command.Parameters.AddWithValue("@owner", booking.OwnerUserId);
-                command.Parameters.AddWithValue("@sitter", booking.SitterUserId);
-                command.Parameters.AddWithValue("@pet", (object)booking.PetId ?? DBNull.Value);
-                command.Parameters.AddWithValue("@start", booking.StartDate.ToString("o", CultureInfo.InvariantCulture));
-                command.Parameters.AddWithValue("@end", booking.EndDate.ToString("o", CultureInfo.InvariantCulture));
-                command.Parameters.AddWithValue("@message", (object)booking.Message ?? DBNull.Value);
-                command.Parameters.AddWithValue("@status", (int)booking.Status);
-                command.Parameters.AddWithValue("@rate", booking.DailyRateAtBooking);
-                command.Parameters.AddWithValue("@created", booking.CreatedUtc.ToString("o", CultureInfo.InvariantCulture));
+" + _db.Dialect.SelectLastInsertId;
+                command.AddParameter("@owner", booking.OwnerUserId);
+                command.AddParameter("@sitter", booking.SitterUserId);
+                command.AddParameter("@pet", (object)booking.PetId ?? DBNull.Value);
+                command.AddParameter("@start", booking.StartDate.ToString("o", CultureInfo.InvariantCulture));
+                command.AddParameter("@end", booking.EndDate.ToString("o", CultureInfo.InvariantCulture));
+                command.AddParameter("@message", (object)booking.Message ?? DBNull.Value);
+                command.AddParameter("@status", (int)booking.Status);
+                command.AddParameter("@rate", booking.DailyRateAtBooking);
+                command.AddParameter("@created", booking.CreatedUtc.ToString("o", CultureInfo.InvariantCulture));
                 booking.Id = Convert.ToInt32(command.ExecuteScalar());
                 return booking;
             }
@@ -49,8 +49,8 @@ SELECT last_insert_rowid();";
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "UPDATE Bookings SET Status = @status WHERE Id = @id;";
-                command.Parameters.AddWithValue("@status", (int)status);
-                command.Parameters.AddWithValue("@id", bookingId);
+                command.AddParameter("@status", (int)status);
+                command.AddParameter("@id", bookingId);
                 command.ExecuteNonQuery();
             }
             // notify subscribers after the database update
@@ -75,7 +75,7 @@ SELECT last_insert_rowid();";
             {
                 // Column name is a hard-coded literal (never user input), so this is safe.
                 command.CommandText = "SELECT * FROM Bookings WHERE " + column + " = @userId ORDER BY CreatedUtc DESC;";
-                command.Parameters.AddWithValue("@userId", userId);
+                command.AddParameter("@userId", userId);
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
@@ -85,7 +85,7 @@ SELECT last_insert_rowid();";
             return bookings;
         }
 
-        private static Booking Map(SQLiteDataReader reader)
+        private static Booking Map(DbDataReader reader)
         {
             object petId = reader["PetId"];
             return new Booking
@@ -109,7 +109,7 @@ SELECT last_insert_rowid();";
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "SELECT * FROM Bookings WHERE Id = @id LIMIT 1;";
-                command.Parameters.AddWithValue("@id", id);
+                command.AddParameter("@id", id);
                 using (var reader = command.ExecuteReader())
                 {
                     if (reader.Read())

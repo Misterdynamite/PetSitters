@@ -4,9 +4,11 @@
     Unit + component/integration tests for the PetSitters (Sitters4Us) logic layer.
 
     These test the UI-independent code directly: Services (AuthService,
-    ValidationHelper, PasswordHasher), the domain Models, and the SQLite Data
-    repositories. This is the ENSE707 "logic/unit-test" project and is separate
-    from PetSitters.UiTests (the slower FlaUI end-to-end UI checks).
+    BookingService, ValidationHelper, PasswordHasher, and the launch-time
+    database choice: AppConfig/EnvFile, DatabaseSelector), the domain Models,
+    and the Data layer (repositories, MySqlUrl). This is the ENSE707
+    "logic/unit-test" project and is separate from PetSitters.UiTests (the
+    slower FlaUI end-to-end UI checks).
 
     Techniques applied from the ENSE707 labs:
       * MSTest, AAA structure, boundary + invalid-input tests        (Lab 1)
@@ -16,9 +18,17 @@
       * Component/integration tests against real SQLite persistence,
         each using an isolated temporary database file                (Lab 5)
 
-    Targets net472 to match the PetSitters app. Build/run from Visual Studio's
-    Test Explorer, or via VS MSBuild + vstest.console.exe (the classic-style
-    PetSitters app cannot be built by `dotnet` alone).
+    The data layer runs on those SQLite temp files: no test touches the app's
+    %AppData% database or the cloud database. MySQL parity tests
+    (MySqlParityTests.cs, TestCategory=MySql) re-run the database tests on a
+    temporary MySQL database, but only when opted in (PETSITTERS_TEST_MYSQL_URL
+    or PETSITTERS_TEST_MYSQL=1); otherwise they are skipped, and the build gate
+    and CI filter them out. See docs/UnitTests.md.
+
+    Targets net472 to match the PetSitters app. Build the app first with VS
+    MSBuild (the classic-style PetSitters app cannot be built by `dotnet`), then
+    run these with `dotnet test PetSitters.Tests -c Debug`, or use Visual
+    Studio's Test Explorer.
   -->
 
   <PropertyGroup>
@@ -29,6 +39,9 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <AssemblyName>PetSitters.Tests</AssemblyName>
     <RootNamespace>PetSitters.Tests</RootNamespace>
+    <!-- MySqlConnector's dependencies (System.Memory etc.) need binding redirects on .NET Framework. -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,6 +54,12 @@
       integration tests open a real database.
     -->
     <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118" />
+    <!--
+      The app's MySQL driver: same version as PetSitters.csproj, so this
+      project resolves (and binding-redirects) its dependencies consistently
+      for the MySQL parity tests and anything else that loads the app's Data layer.
+    -->
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
   </ItemGroup>
 
   <ItemGroup>
