@@ -141,7 +141,7 @@ flowchart TD
 
 | View | Role | Tabs / purpose |
 |------|------|----------------|
-| `LoginView` | anyone | Email + password login (asks Owner/Sitter if both accounts match); offline notice when running on the local fallback (§5.1) |
+| `LoginView` | anyone | Email + password login (asks Owner/Sitter if both accounts match); offline notice when running on the local fallback (§5.1); the card scrolls when the window is too small for it (DEF-005) |
 | `RegisterView` | anyone | Create an Owner or Sitter account (personal details incl. location) |
 | `OwnerDashboardView` | Owner | **My Details** · **My Pets** · **Find Sitters** (browse + request booking) · **Chats** · hidden **Chat** panel · **My Bookings** (status + cancel) |
 | `SitterDashboardView` | Sitter | **My Details** · **My Sitting Profile** (availability, experience, rate…) · **Booking Requests** (accept/decline) · **My Chats** · hidden **Chat** panel |
@@ -631,8 +631,9 @@ same rows):
   (an unreachable `DATABASE_URL` opens on the local database, the login screen's
   notice says "Working offline", and registration still works) and
   `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` (choosing the local
-  database on purpose shows no notice). Both passed on 2026-10-09, with the
-  window maximised (the known workaround for the clipped login form).
+  database on purpose shows no notice). Both passed on 2026-10-12 at the default
+  window size (the clipped login form, DEF-005, is fixed; until then the UI tests
+  were run maximised).
 
 Counts and the per-test list are in `docs/UnitTests.md`.
 

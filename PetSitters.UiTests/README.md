@@ -27,6 +27,7 @@ automated coverage.
 | `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | REQ-GR-09: with a cloud `DATABASE_URL` that refuses connections, the app still opens on the local database, the login screen's `OfflineNotice` says *Working offline*, and registering an account still works |
 | `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` | REQ-GR-09: when the local database is chosen deliberately (`PETSITTERS_DB=sqlite`), the login screen shows no offline notice, since there is nothing to warn about |
 | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | Failed login shows the generic, non-enumerating message and stays put |
+| `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` | DEF-005: in a window too small for the login card (resized to 700×420), the form scrolls instead of being cut off; scrolled down the Log in button is on screen, scrolled up the email box is |
 
 **Changed 2026-10-09.** Both `Startup_*` tests used to read the database status
 in the app's header (`StorageStatus`), and the second was named
@@ -116,12 +117,14 @@ refused local port, so it needs no network either. It is slower than the others
 because the app waits for the failed connection before showing the login screen
 (about 7 s to open in testing).
 
-> **Known issue — default window size.** Since the login/register redesign the
-> 920×640 window clips the password box off screen, so tests can fail with FlaUI's
-> `NoClickablePointException`. All 8 passed with the app window maximised on
-> 2026-10-07, and again on 2026-10-09 after the header change and the UI wording
-> changes. The fix
-> belongs in the app's layout, not the driver — real users hit the same clipping.
+> **Fixed 2026-10-12 (DEF-005): default window size.** Since the login/register
+> redesign the login card had no scrollbar, so at the default 920×640 window the
+> password box was cut off and tests failed with FlaUI's `NoClickablePointException`;
+> until 2026-10-09 the suite was run with the window maximised. The login card now
+> scrolls (`LoginScroll`), and all 9 tests pass at the default window size
+> (2026-10-12). `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` keeps it
+> that way. The fix went into the app's layout, not the driver, because real users
+> hit the same clipping.
 
 ### Build order (important)
 

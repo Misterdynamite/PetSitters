@@ -121,6 +121,31 @@ namespace PetSitters.UiTests
             return element != null && !element.IsOffscreen;
         }
 
+        /// <summary>
+        /// Restores the app window from maximised (if it is) and resizes it, so a
+        /// test can check how a screen copes with a small window (DEF-005).
+        /// </summary>
+        public void ResizeWindow(int width, int height)
+        {
+            _window.Patterns.Window.Pattern.SetWindowVisualState(WindowVisualState.Normal);
+            _window.Patterns.Transform.Pattern.Resize(width, height);
+            Thread.Sleep(FocusSettle);   // let WPF re-run layout at the new size
+        }
+
+        /// <summary>True if the scroll area (by x:Name) has more content than fits, vertically.</summary>
+        public bool CanScrollVertically(string scrollViewerId)
+        {
+            return ByName(scrollViewerId).Patterns.Scroll.Pattern.VerticallyScrollable.Value;
+        }
+
+        /// <summary>Scrolls a scroll area (by x:Name) to its bottom (true) or top (false).</summary>
+        public void ScrollTo(string scrollViewerId, bool end)
+        {
+            // -1 = leave the horizontal position as it is (UIA's NoScroll).
+            ByName(scrollViewerId).Patterns.Scroll.Pattern.SetScrollPercent(-1, end ? 100 : 0);
+            Thread.Sleep(FocusSettle);
+        }
+
         /// <summary>True if any element anywhere in the window renders the given text (label, list cell, ...).</summary>
         public bool HasText(string text)
         {

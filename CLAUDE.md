@@ -20,7 +20,7 @@ database when one is configured and reachable at launch, and falls back to a loc
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
 | `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (292 cases on SQLite, plus 125 opt-in MySQL parity cases) |
-| `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (8 tests) |
+| `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (9 tests) |
 
 ## Build, test, run — IMPORTANT tooling notes
 
@@ -249,12 +249,15 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 
 ## Known state / WIP
 
-- **UI regression suite fails at the default window size (since the login/register
-  redesign, 503e9af/6f33d67).** The 920×640 window clips the password box off
-  screen, so FlaUI throws `NoClickablePointException`. All 8 UI tests pass with the
-  window maximised (checked again on 2026-10-09, after the header status was removed
-  and the UI wording simplified). Fix the layout (or add a ScrollViewer)
-  rather than maximising in the driver, because real users hit the same clipping.
+- **DEF-005 fixed (2026-10-12): the login form scrolls.** Since the login/register
+  redesign (503e9af/6f33d67) the login card had no scrollbar, so in a small window
+  the password box and Log in button were cut off; the UI tests failed with
+  `NoClickablePointException` at the default 920×640 window and had to be run
+  maximised. The card is now inside a `ScrollViewer` (`LoginScroll`), like the
+  register screen, and all 9 UI tests pass at the default window size (2026-10-12),
+  so the maximise workaround is no longer needed.
+  `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` guards it. Keep new
+  screens scrollable rather than maximising in the driver.
 - **No sync between the cloud and local stores**, and existing local data is not
   migrated to the cloud. A fallback session's data stays on that PC.
 - **Profile/pet images are local-only.** They are copied to

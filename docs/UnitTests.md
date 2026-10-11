@@ -447,7 +447,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 > `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` (choosing the local
 > database on purpose shows no offline notice; renamed on 2026-10-09 from
 > `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` when the header label
-> was removed). Both passed on 2026-10-09 with the window maximised (see
+> was removed). Both passed on 2026-10-12 at the default window size (see
 > [CI.md](CI.md)).
 
 ---
@@ -508,27 +508,28 @@ rows are labelled with each kind they contain.
 |-------|--------:|---------------:|
 | Unit | 50 | 163 |
 | Integration | 101 | 129 |
-| System | 8 | 8 |
+| System | 9 | 9 |
 | Acceptance | 6 | 6 |
-| Regression | 10 | 10 |
+| Regression | 11 | 11 |
 | Security | 30 | 55 |
 | Performance | 4 | 4 |
-| Usability | 2 | 2 |
+| Usability | 3 | 3 |
 | Smoke | 12 | 12 |
 | Accessibility | 0 | 0 |
 | Positive | 98 | 200 |
 | Negative | 48 | 90 |
-| Boundary | 30 | 110 |
+| Boundary | 31 | 111 |
 | InvalidInput | 30 | 107 |
 | ErrorHandling | 19 | 29 |
 
-(Totals across labels exceed the 292 logic + 8 UI cases because tests carry several labels. The 125 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
+(Totals across labels exceed the 292 logic + 9 UI cases because tests carry several labels. The 125 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
 
 **Known gaps (stated, not hidden):**
 - **Accessibility: none.** REQ-NFR-04 isn't implemented or assessed yet; the
   planned method is a Nielsen-heuristic review, which is manual.
-- **Usability is thin.** The two UI tests only check that messages are shown;
-  the planned KLM benchmark for REQ-NFR-01 is not automated.
+- **Usability is thin.** The three Usability-labelled UI tests check that
+  messages are shown and that the login form can still be reached in a small
+  window (DEF-005); the planned KLM benchmark for REQ-NFR-01 is not automated.
 - **Performance covers sign-in time and query counts only.** The high-load E2E test in the milestone
   plan does not exist yet. The build gate checks the sign-in budget on SQLite
   only; the opt-in parity run also checks it on MySQL. Cloud-mode screen times
@@ -727,3 +728,4 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `UiRegressionTests` | `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | 1 | System, Acceptance, Regression | ErrorHandling, Negative |
 | `UiRegressionTests` | `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` | 1 | System, Regression | Positive |
 | `UiRegressionTests` | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | 1 | System, Security, Regression | Negative, ErrorHandling |
+| `UiRegressionTests` | `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` | 1 | System, Usability, Regression | Boundary |

@@ -443,6 +443,36 @@ namespace PetSitters.UiTests
                 "A failed login should leave the user on the login screen.");
         }
 
+        /// <summary>
+        /// DEF-005 regression: the login card used to have no scrollbar, so in a
+        /// window too small for it the password box and Log in button were cut
+        /// off and could not be reached. Now the form scrolls, so both ends of it
+        /// can be brought into view.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Usability")]
+        [TestCategory("Regression")]
+        [TestCategory("Boundary")]
+        [TestProperty("Requirements", "FR-A1, FR-A2")]
+        public void Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached()
+        {
+            Step("Shrink the window below the size of the login card");
+            _app.ByName("EmailBox");   // the login screen is up
+            _app.ResizeWindow(700, 420);
+
+            Assert.IsTrue(_app.CanScrollVertically("LoginScroll"),
+                "When the card doesn't fit, the login form should scroll instead of being cut off.");
+
+            Step("Scroll to the bottom: the Log in button can be reached");
+            _app.ScrollTo("LoginScroll", end: true);
+            Assert.IsTrue(_app.IsShown("LoginButton"), "The Log in button should be on screen after scrolling down.");
+
+            Step("Scroll back to the top: the email box can be reached");
+            _app.ScrollTo("LoginScroll", end: false);
+            Assert.IsTrue(_app.IsShown("EmailBox"), "The email box should be on screen after scrolling up.");
+        }
+
         // ---- journey steps ---------------------------------------------------
 
         /// <param name="email">Defaults to the sitter's own; REQ-GR-06 reuses the owner's.</param>

@@ -41,9 +41,13 @@
         <!-- Top header bar -->
         <DockPanel LastChildFill="False"/>
 
-        <!-- Centered login card -->
+        <!-- Centred login card, inside a ScrollViewer (DEF-005): when the window is
+             too small for the card, the form scrolls instead of being cut off, so
+             the password box and Log in button can always be reached. While the
+             card fits, no scrollbar shows and it stays centred as before. -->
+        <ScrollViewer x:Name="LoginScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
         <Border Background="{StaticResource LoginPaletteMid}" CornerRadius="22" Padding="36"
-                Width="420" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,40,0,0">
+                Width="420" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16,40,16,16">
             <StackPanel HorizontalAlignment="Center">
                 <TextBlock Text="Welcome back" FontFamily="/PetSitters;component/Assets/Fonts/#Fredoka" FontSize="24" HorizontalAlignment="Center" FontWeight="Bold" Foreground="White"/>
                 <TextBlock Text="Log in to find or offer pet sitting." FontSize="15" HorizontalAlignment="Center" Foreground="White" Opacity="0.85" Margin="0,6,0,14"/>
@@ -74,7 +78,7 @@
                                  Foreground="White"/>
                 </StackPanel>
 
-                <Button Content="Log in" Margin="0,20,0,0" Click="Login_Click" IsDefault="True" Width="180" Height="36"
+                <Button x:Name="LoginButton" Content="Log in" Margin="0,20,0,0" Click="Login_Click" IsDefault="True" Width="180" Height="36"
                         HorizontalAlignment="Center" Background="{StaticResource LoginPaletteDark}" Foreground="{StaticResource LoginPalettePale}" BorderThickness="0">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
@@ -91,5 +95,6 @@
                 </StackPanel>
             </StackPanel>
         </Border>
+        </ScrollViewer>
     </Grid>
 </UserControl>
