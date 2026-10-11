@@ -109,6 +109,18 @@ namespace PetSitters.UiTests
                 TimeSpan.FromSeconds(4)).Result != null;
         }
 
+        /// <summary>
+        /// True if the control is present AND on screen, checked once (no wait):
+        /// for asserting that something is NOT shown. A collapsed WPF element is
+        /// either missing from UI Automation or reported off-screen, depending on
+        /// the element, so both count as "not shown".
+        /// </summary>
+        public bool IsShown(string automationId)
+        {
+            AutomationElement element = _window.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+            return element != null && !element.IsOffscreen;
+        }
+
         /// <summary>True if any element anywhere in the window renders the given text (label, list cell, ...).</summary>
         public bool HasText(string text)
         {

@@ -15,7 +15,7 @@
         <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="Muted" Color="#6B7280"/>
         <SolidColorBrush x:Key="Danger" Color="#C0392B"/>
-        <!-- Dark amber: readable on the pink header, used for the "offline: local database" indicator. -->
+        <!-- Dark amber: readable on the pink login card, used for the login screen's offline notice. -->
         <SolidColorBrush x:Key="Warning" Color="#7A3300"/>
 
         <Style TargetType="TextBlock">

@@ -175,7 +175,9 @@ namespace PetSitters.Views
             }
             if (!ValidationHelper.TryParseRate(RateBox.Text, out decimal rate))
             {
-                ShowProfileError("Daily rate must be a number from 0 to 99,999,999.99, with at most 2 decimal places.");
+                // The limits (0 to 99,999,999.99, at most 2 decimal places) come
+                // from the DECIMAL(10,2) money column.
+                ShowProfileError("Enter a daily rate from 0 to 99,999,999.99, e.g. 45 or 45.50.");
                 return;
             }
 
@@ -415,7 +417,7 @@ namespace PetSitters.Views
             // cancelled; the chat lists alone only filter what can be opened.
             if (booking.Status != BookingStatus.Accepted)
             {
-                MessageBox.Show($"This booking is {booking.Status.ToString().ToLowerInvariant()}, so its chat is closed.");
+                MessageBox.Show($"This chat is closed. The booking is {booking.Status.ToString().ToLowerInvariant()}.");
                 return;
             }
 
@@ -470,7 +472,7 @@ namespace PetSitters.Views
             OwnerName = owner?.FullName ?? "(unknown)";
             OwnerLocation = Or(owner?.Location, "Not provided");
             OwnerPhone = Or(owner?.Phone, "Not provided");
-            DateRange = b.StartDate.ToString("d MMM yyyy") + " – " + b.EndDate.ToString("d MMM yyyy");
+            DateRange = b.StartDate.ToString("d MMM yyyy") + " - " + b.EndDate.ToString("d MMM yyyy");
             Nights = b.Nights;
             Total = OwnerDashboardView.Currency(b.EstimatedTotal);
             Status = b.Status.ToString();
@@ -489,7 +491,7 @@ namespace PetSitters.Views
             else
             {
                 HasSpecificPet = false;
-                PetSummary = "The owner didn't choose a specific pet — this request covers all of their pets.";
+                PetSummary = "All of the owner's pets.";
             }
         }
 

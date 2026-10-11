@@ -19,9 +19,13 @@ namespace PetSitters.Views
 
             // On the local fallback, a cloud account "doesn't exist", so login would
             // say "Incorrect email or password" and invite a duplicate local sign-up.
-            // Explain why up front instead.
+            // Explain why up front instead. This is the only place the UI mentions
+            // the database at all; the reason (e.g. an error code) is on hover only.
             if (services.Storage.FellBack)
+            {
                 OfflineNotice.Visibility = Visibility.Visible;
+                OfflineNotice.ToolTip = services.Storage.Detail;
+            }
         }
 
         private void Login_Click(object sender, RoutedEventArgs e)

@@ -353,7 +353,7 @@ namespace PetSitters.Tests
 
             Assert.IsFalse(result.Success);
             Assert.IsTrue(result.ChangedElsewhere, "The sitter's list is stale and must be reloaded.");
-            StringAssert.Contains(result.ErrorMessage, "it is now cancelled");
+            StringAssert.Contains(result.ErrorMessage, "already been cancelled");
             Assert.AreEqual(BookingStatus.Cancelled, Services.Bookings.GetById(booking.Id).Status);
         }
 
@@ -386,7 +386,7 @@ namespace PetSitters.Tests
 
             Assert.IsFalse(result.Success);
             Assert.IsTrue(result.ChangedElsewhere);
-            StringAssert.Contains(result.ErrorMessage, "it is now declined");
+            StringAssert.Contains(result.ErrorMessage, "already been declined");
             Assert.AreEqual(BookingStatus.Declined, Services.Bookings.GetById(booking.Id).Status);
         }
 

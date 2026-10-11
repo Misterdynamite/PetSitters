@@ -24,7 +24,7 @@ namespace PetSitters.UiTests
     ///   REQ-PO-08 same-pet double booking refused, REQ-PO-07 owner cancels
     ///     (SamePetDoubleBooking_* test; the journey also cancels an accepted booking)
     ///   REQ-GR-06 one account per email per role; login asks which (SharedEmail_* test)
-    ///   REQ-GR-09 cloud database with local fallback; header says which (Startup_* tests)
+    ///   REQ-GR-09 cloud database with local fallback; offline notice on login (Startup_* tests)
     ///   REQ-GR-04 booking form validation messages (BookingForm_* test)
     ///
     /// Partly covered: FR-O5 (owner-side chat) works in the app, but this suite
@@ -202,7 +202,7 @@ namespace PetSitters.UiTests
 
             // Unlike G1, the refusal path deliberately does NOT reload the list,
             // so the RequestStatus label is durable here and safe to assert on.
-            StringAssert.Contains(_app.ReadText("RequestStatus"), "overlaps a booking you have already accepted",
+            StringAssert.Contains(_app.ReadText("RequestStatus"), "overlaps a booking you've already accepted",
                 "Accepting an overlapping request should be refused with an explanation.");
             StringAssert.Contains(_app.ReadText("RequestStatus"), "stay pending",
                 "The refusal should tell the sitter the request stays pending.");
@@ -392,9 +392,9 @@ namespace PetSitters.UiTests
                 ["DB_CONNECT_TIMEOUT_SECONDS"] = "3",
             });
 
-            _app.ByName("EmailBox");   // waits until the login screen has replaced "Connecting…"
-            StringAssert.Contains(_app.ReadText("StorageStatus"), "Offline: local database",
-                "The header should say the app fell back to the local database.");
+            _app.ByName("EmailBox");   // waits until the login screen has replaced "Loading..."
+            StringAssert.Contains(_app.ReadText("OfflineNotice"), "Working offline",
+                "The login screen should say the app fell back to the local database.");
 
             Step("The app still works offline: register on the local database");
             RegisterOwner();
@@ -402,19 +402,19 @@ namespace PetSitters.UiTests
 
         /// <summary>
         /// With the cloud database switched off (PETSITTERS_DB=sqlite, as every
-        /// other UI test runs), the header says the local database is in use and
-        /// doesn't wrongly claim to be offline.
+        /// other UI test runs), choosing the local database is deliberate, so the
+        /// login screen must not wrongly claim to be offline.
         /// </summary>
         [TestMethod]
         [TestCategory("System")]
         [TestCategory("Regression")]
         [TestCategory("Positive")]
         [TestProperty("Requirements", "REQ-GR-09")]
-        public void Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase()
+        public void Startup_LocalDatabaseChosen_ShowsNoOfflineNotice()
         {
-            _app.ByName("EmailBox");
-            Assert.AreEqual("Local database", _app.ReadText("StorageStatus"),
-                "When the local database is chosen deliberately, the header should say so plainly.");
+            _app.ByName("EmailBox");   // the login screen is up
+            Assert.IsFalse(_app.IsShown("OfflineNotice"),
+                "When the local database is chosen deliberately, there is nothing to warn about.");
         }
 
         /// <summary>

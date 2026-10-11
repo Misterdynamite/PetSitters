@@ -514,7 +514,7 @@ namespace PetSitters.Views
             // cancelled; the chat lists alone only filter what can be opened.
             if (booking.Status != PetSitters.Models.BookingStatus.Accepted)
             {
-                MessageBox.Show($"This booking is {booking.Status.ToString().ToLowerInvariant()}, so its chat is closed.");
+                MessageBox.Show($"This chat is closed. The booking is {booking.Status.ToString().ToLowerInvariant()}.");
                 return;
             }
 
@@ -571,8 +571,10 @@ namespace PetSitters.Views
         {
             get
             {
-                string loc = string.IsNullOrWhiteSpace(Location) ? "Location N/A" : Location;
-                return $"{loc}  ·  {OwnerDashboardView.Currency(DailyRate)}/day  ·  {ExperienceYears} yr(s) exp";
+                // Plain commas, e.g. "Wellington, $45.00/day, 5 years experience".
+                string loc = string.IsNullOrWhiteSpace(Location) ? "No location given" : Location;
+                string years = ExperienceYears == 1 ? "1 year" : ExperienceYears + " years";
+                return $"{loc}, {OwnerDashboardView.Currency(DailyRate)}/day, {years} experience";
             }
         }
     }
@@ -593,7 +595,7 @@ namespace PetSitters.Views
             BookingId = b.Id;
             SitterName = sitterName;
             PetName = petName;
-            DateRange = b.StartDate.ToString("d MMM yyyy") + " – " + b.EndDate.ToString("d MMM yyyy");
+            DateRange = b.StartDate.ToString("d MMM yyyy") + " - " + b.EndDate.ToString("d MMM yyyy");
             Nights = b.Nights;
             Total = OwnerDashboardView.Currency(b.EstimatedTotal);
             Status = b.Status.ToString();

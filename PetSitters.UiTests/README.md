@@ -10,8 +10,8 @@ a person would — clicking buttons, typing into boxes, switching tabs, opening
 dialogs and reading labels back.
 
 Its regression job is to catch breakages unit tests cannot see: view wiring,
-navigation, role routing, cross-role workflows and what the header tells the user
-about which database the app opened on. Notably **FR-S3** (sitter views full job
+navigation, role routing, cross-role workflows and the offline notice the login
+screen shows when the app falls back to the local database. Notably **FR-S3** (sitter views full job
 details before deciding) is UI-only presentation, so this project is its *only*
 automated coverage.
 
@@ -24,9 +24,18 @@ automated coverage.
 | `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | REQ-PO-08 + REQ-PO-07: booking the same pet twice is refused; cancelling the pending booking (with confirmation) frees the pet to rebook, and the cancelled one leaves the sitter's queue |
 | `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | REQ-GR-06: an owner re-registers as a sitter with the same email; a second sitter sign-up is refused with a warning; login with the shared password asks Owner/Sitter and opens the chosen dashboard |
 | `BookingForm_InvalidRequests_AreRejectedWithSpecificMessages` | REQ-GR-04: no pet, start in the past and a 15-day booking are each rejected with their own message; exactly 14 days is accepted (dates are set through UI Automation with `SetDate`) |
-| `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | REQ-GR-09: with a cloud `DATABASE_URL` that refuses connections, the app still opens on the local database, the header says *⚠ Offline: local database*, and registering an account still works |
-| `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` | REQ-GR-09: when the local database is chosen deliberately (`PETSITTERS_DB=sqlite`), the header says *Local database* plainly instead of claiming to be offline |
+| `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | REQ-GR-09: with a cloud `DATABASE_URL` that refuses connections, the app still opens on the local database, the login screen's `OfflineNotice` says *Working offline*, and registering an account still works |
+| `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` | REQ-GR-09: when the local database is chosen deliberately (`PETSITTERS_DB=sqlite`), the login screen shows no offline notice, since there is nothing to warn about |
 | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | Failed login shows the generic, non-enumerating message and stays put |
+
+**Changed 2026-10-09.** Both `Startup_*` tests used to read the database status
+in the app's header (`StorageStatus`), and the second was named
+`Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase`. The header showed it
+because the local fallback doesn't sync, so users were meant to always see which
+store they were on. The user asked for that status to be removed (the app
+shouldn't advertise which database it uses), which retires that reason. What
+still stands: the fallback, the one case that matters, is still announced by the
+login screen's notice, so the tests now check that instead.
 
 The journey covers: register **Sitter** → personal details → sitting profile →
 register **Owner** → personal details → add pet → browse sitters → **book** →
@@ -77,7 +86,7 @@ database instead of the local file. That database can't be wiped between tests a
 must never collect test accounts, so `PetSittersDriver` launches **every** app with
 `PETSITTERS_DB=sqlite`. Real environment variables override `.env`, so the app
 always opens on the local file the wipe just reset — even when `bin\Debug\.env`
-exists — and the header reads *Local database*.
+exists — and the login screen shows no offline notice.
 
 The one exception is `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo`,
 which relaunches with `PETSITTERS_DB=auto` and a `DATABASE_URL` aimed at a refused
@@ -109,7 +118,9 @@ because the app waits for the failed connection before showing the login screen
 
 > **Known issue — default window size.** Since the login/register redesign the
 > 920×640 window clips the password box off screen, so tests can fail with FlaUI's
-> `NoClickablePointException`. All 8 pass with the app window maximised. The fix
+> `NoClickablePointException`. All 8 passed with the app window maximised on
+> 2026-10-07, and again on 2026-10-09 after the header change and the UI wording
+> changes. The fix
 > belongs in the app's layout, not the driver — real users hit the same clipping.
 
 ### Build order (important)
@@ -168,7 +179,10 @@ By default the test finds `PetSitters.exe` under the solution's `bin\Debug` (the
 
 Every control the tests touch has an `x:Name` in the XAML, which WPF exposes to UI
 Automation as the **AutomationId** (`EmailBox`, `RateBox`, `ChatInput`, the
-header's `StorageStatus`, ...).
+login screen's `OfflineNotice`, ...). To check that something is *not* shown,
+the driver's `IsShown` looks once, without waiting: a control counts as shown
+only if it exists and is on screen, because a collapsed WPF element is either
+missing from UI Automation or reported off-screen.
 Buttons and tabs have no `x:Name`, so they're matched by visible text
 (`"Create account"`, `"My Chats"`, ...). Rename either in the app and the matching
 string here must change too.

@@ -48,8 +48,7 @@ namespace PetSitters.Tests
 
             Assert.AreSame(cloud, selection.Database);
             Assert.IsTrue(selection.UsingCloud);
-            Assert.IsFalse(selection.FellBack);
-            Assert.AreEqual("Cloud database", selection.Summary);
+            Assert.IsFalse(selection.FellBack, "No offline notice when the shared database is in use.");
         }
 
         [TestMethod]
@@ -68,8 +67,7 @@ namespace PetSitters.Tests
             Assert.AreSame(local, selection.Database);
             Assert.IsFalse(selection.UsingCloud);
             Assert.IsTrue(selection.FellBack, "Users must be told they are on unshared local data.");
-            Assert.AreEqual("Offline: local database", selection.Summary);
-            StringAssert.Contains(selection.Detail, "won't be seen by other users");
+            StringAssert.StartsWith(selection.Detail, "Couldn't connect to the server");
             Assert.IsFalse(selection.Detail.Contains("127.0.0.1"), "The tooltip must not name the server.");
         }
 
@@ -86,7 +84,7 @@ namespace PetSitters.Tests
                 url => throw new InvalidOperationException("simulated SQL error while creating tables"));
 
             Assert.IsTrue(selection.FellBack);
-            Assert.AreEqual("Cloud database error: local database", selection.Summary);
+            StringAssert.StartsWith(selection.Detail, "Connected to the server, but couldn't set up the database");
         }
 
         [DataTestMethod]
@@ -159,8 +157,8 @@ namespace PetSitters.Tests
                 url => throw new AssertFailedException("The cloud must not be attempted when PETSITTERS_DB=sqlite."));
 
             Assert.AreSame(local, selection.Database);
+            Assert.IsFalse(selection.UsingCloud);
             Assert.IsFalse(selection.FellBack, "Choosing local on purpose is not a failure.");
-            Assert.AreEqual("Local database", selection.Summary);
         }
 
         [TestMethod]

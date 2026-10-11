@@ -19,7 +19,7 @@ sitters can accept or decline.
 | FR-7 | Sitter registers personal details incl. location | `SitterDashboardView` → *My Details* tab |
 | FR-8 | Sitter registers availability, experience, preferences, qualifications, daily rate | `SitterDashboardView` → *My Sitting Profile* tab |
 | FR-O5 / FR-S5 | Owner and sitter chat about an accepted booking | *Chats* / *My Chats* tabs in both dashboards, `Data/ChatRepository` |
-| REQ-GR-09 (proposed) | Shared cloud database with local fallback at launch | `Services/DatabaseSelector`, `Services/AppConfig`, `MainWindow` → header status |
+| REQ-GR-09 (proposed) | Shared cloud database with local fallback at launch | `Services/DatabaseSelector`, `Services/AppConfig`, `LoginView` → offline notice |
 
 ## Architecture
 
@@ -49,8 +49,8 @@ Services/    UI-independent logic
 Views/       WPF UserControls (one per screen), swapped into MainWindow
 ```
 
-At startup `App.xaml.cs` opens `MainWindow` straight away with *Connecting to the
-database…*, loads the settings (`AppConfig`), and chooses the database on a
+At startup `App.xaml.cs` opens `MainWindow` straight away with *Loading...*,
+loads the settings (`AppConfig`), and chooses the database on a
 background thread (`DatabaseSelector`) so the window never freezes. It then builds
 `AppServices` around that database and hands it to `MainWindow.Attach`, which shows
 the login screen and from then on swaps the active view (login → register →
@@ -70,7 +70,8 @@ made **once, at launch**:
    tables. If that works, everyone running the app with the same `.env` shares
    the same accounts, pets, bookings and chats.
 4. If it can't connect (offline, timeout, wrong password, bad URL…) or the table
-   setup fails, it **falls back to the local database** and says so in the header.
+   setup fails, it **falls back to the local database** and the login screen
+   says so (see [Which database am I on?](#configuring-the-database-env)).
 
 There is no switching or syncing afterwards: restart the app to try the cloud
 again. How to configure it is in [Configuring the database (.env)](#configuring-the-database-env).
@@ -165,24 +166,37 @@ documents every key.
    rebuild so the copy is picked up; do the same after deleting it. Delete the
    repo-root `.env` and rebuild to remove the copy too.
 
-4. **Run** `bin\Debug\PetSitters.exe`. The window shows *Connecting to the
-   database…* for a moment (about 2.4 s to the cloud in our measurement), then
-   the login screen.
+4. **Run** `bin\Debug\PetSitters.exe`. The window shows *Loading...* for a
+   moment, then the login screen (the login screen appeared about 2.4 s after
+   launch on the cloud database in our measurement).
 
-**Which database am I on?** The right-hand side of the header says:
+**Which database am I on?** The app doesn't say while everything is working.
+The only database message is on the login screen, and only when the app fell
+back to the local file:
 
-| Header | Meaning |
-|--------|---------|
-| ☁ Cloud database | Connected to the shared MySQL database. |
-| Local database | No `DATABASE_URL`, or `PETSITTERS_DB=sqlite`. |
-| ⚠ Offline: local database | Couldn't connect (no internet, timeout, refused, wrong password, unknown database, malformed URL), so it fell back to the local file. |
-| ⚠ Cloud database error: local database | Connected, but setting up the tables failed — a real error, not a network problem. |
+> Working offline. Only accounts on this computer will work, and your changes won't reach other users. Restart the app to reconnect.
 
-Hover over it for the reason and an error code (it never shows the host, user
-name or password). In either fallback state the login screen also shows an amber
-notice: cloud accounts won't work and nothing created now is shared. If the cloud
-is unreachable the app waits up to `DB_CONNECT_TIMEOUT_SECONDS` before falling
-back. **Restart the app to try the cloud again.**
+The notice reads the same in both fallback cases. Hover over it for the reason,
+which tells them apart:
+
+| Reason starts with | Meaning |
+|--------------------|---------|
+| *Couldn't connect to the server:* | No internet, timeout, refused, wrong password, unknown database or malformed URL. |
+| *Connected to the server, but couldn't set up the database:* | Setting up the tables failed: a real error, not a network problem. |
+
+The reason is fixed wording, plus an error code where one exists, and never
+shows the host, user name or password. If the cloud is unreachable the app waits up to
+`DB_CONNECT_TIMEOUT_SECONDS` before falling back. **Restart the app to try the
+cloud again.**
+
+> **Reversed (2026-10-09): no database status in the header.** The header used
+> to show which database was in use on every screen, with the reason on hover.
+> The argument for it was that the local fallback never syncs, so users should
+> always be able to see which store they are on. That argument was retired by a
+> product decision: the UI should not advertise which database or
+> infrastructure it runs on. What still stands: the login screen still warns in
+> the one case that matters (fallback), and the offline-vs-error distinction is
+> kept in the notice's hover reason.
 
 **Settings** (all optional):
 

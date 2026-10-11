@@ -184,9 +184,10 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
   command timeout reading from the socket) while the other 118 passed. **Read a
   timeout failure as "re-run", and an assertion failure as a real difference
   between the engines.**
-- **Last result (2026-10-07, after the review fixes): 121/121 passed** against
-  the real cloud MySQL server in 4 m 15 s (the rerun after the 118/121 run above).
-  Afterwards the server held no `sitters4us_test_*` databases.
+- **Last result (2026-10-09, after the UI wording changes): 121/121 passed**
+  against the real cloud MySQL server in 4 m 18 s. Before that, 2026-10-07 after
+  the review fixes: 121/121 in 4 m 15 s (the rerun after the 118/121 run above),
+  after which the server held no `sitters4us_test_*` databases.
 
 ## Why the UI suite runs locally, not in CI (alternative workflow)
 
@@ -195,7 +196,9 @@ reads the screen. Hosted CI runners have no reliable interactive desktop.
 The suite is also currently affected by a known layout defect (the login screen
 is clipped at the default 920×640 window) and fails if anyone uses the mouse
 mid-run. Running it in CI would make the pipeline red for reasons unrelated to
-the change being tested. All 8 tests pass with the window maximised.
+the change being tested. All 8 tests passed with the window maximised on
+2026-10-07, and again on 2026-10-09 after the header change and the UI wording
+changes (below).
 
 So the UI suite is a **manual pre-merge gate**: whoever changes a view runs it
 locally before pushing (`dotnet test PetSitters.UiTests`), and it saves a
@@ -210,11 +213,19 @@ the start-up choice (REQ-GR-09, proposed):
 
 - `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` relaunches with
   `PETSITTERS_DB=auto` and a `DATABASE_URL` pointing at a closed local port
-  (connect timeout 3 s). It checks that the header reads *Offline: local
-  database* and that registration still works. The real cloud server is never
-  contacted.
-- `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` checks that the
-  forced-local header says *Local database*.
+  (connect timeout 3 s). It checks that the login screen shows the *Working
+  offline* notice and that registration still works. The real cloud server is
+  never contacted.
+- `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` checks that the login
+  screen shows no offline notice when the local database was chosen on purpose
+  (`PETSITTERS_DB=sqlite`), since there is nothing to warn about.
+
+Until 2026-10-09 both tests read a database status in the app's header, and the
+second was named `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase`. That
+status was removed at the user's request (the app shouldn't advertise which
+database it uses), so the tests now check the login screen's notice instead. It
+still appears in the one case that matters: when the app has fallen back to the
+local database.
 
 ## How to run everything
 

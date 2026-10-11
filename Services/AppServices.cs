@@ -21,7 +21,7 @@ namespace PetSitters.Services
         public AuthService Auth { get; }
         public BookingService BookingActions { get; }
 
-        /// <summary>Which database is in use and why (shown in the window header).</summary>
+        /// <summary>Which database is in use and why (the login screen warns when it fell back).</summary>
         public DatabaseSelection Storage { get; }
 
         /// <summary>The currently logged-in user, or null if nobody is signed in.</summary>

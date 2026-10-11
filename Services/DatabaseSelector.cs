@@ -4,8 +4,11 @@ using PetSitters.Data;
 namespace PetSitters.Services
 {
     /// <summary>
-    /// Which database the app ended up using at launch, and why, for the
-    /// header status indicator and its tooltip. Never contains credentials.
+    /// Which database the app ended up using at launch, and why. Never contains
+    /// credentials. The only thing the UI shows is the login screen's offline
+    /// notice when <see cref="FellBack"/> is true, with <see cref="Detail"/> as its
+    /// tooltip. (A header label showing the database in use was removed: users
+    /// don't need to know which database they're on unless it's the offline one.)
     /// </summary>
     public sealed class DatabaseSelection
     {
@@ -21,18 +24,18 @@ namespace PetSitters.Services
         /// </summary>
         public bool FellBack { get; }
 
-        /// <summary>Short label for the header, e.g. "Cloud database".</summary>
-        public string Summary { get; }
-
-        /// <summary>One or two sentences for the tooltip: where the data is, and why.</summary>
+        /// <summary>
+        /// One plain sentence saying why this database was chosen, e.g.
+        /// "Couldn't connect to the server: ...". Shown only as the offline
+        /// notice's tooltip, for troubleshooting.
+        /// </summary>
         public string Detail { get; }
 
-        public DatabaseSelection(Database database, bool usingCloud, bool fellBack, string summary, string detail)
+        public DatabaseSelection(Database database, bool usingCloud, bool fellBack, string detail)
         {
             Database = database ?? throw new ArgumentNullException(nameof(database));
             UsingCloud = usingCloud;
             FellBack = fellBack;
-            Summary = summary;
             Detail = detail;
         }
 
@@ -41,8 +44,7 @@ namespace PetSitters.Services
         {
             bool cloud = database.Provider == DatabaseProvider.MySql;
             return new DatabaseSelection(database, cloud, false,
-                cloud ? "Cloud database" : "Local database",
-                cloud ? "Using the shared cloud database." : "Using the local database on this computer.");
+                cloud ? "Connected to the shared database." : "Using the database on this computer.");
         }
     }
 
@@ -74,20 +76,19 @@ namespace PetSitters.Services
             if (config == null) throw new ArgumentNullException(nameof(config));
 
             if (config.ForceLocalDatabase)
-                return Local(createLocal(), false, "Local database",
-                    "Using the local database because " + AppConfig.DatabaseModeKey + " is set to use it.");
+                return Local(createLocal(), false,
+                    "Using the database on this computer (" + AppConfig.DatabaseModeKey + " is set to sqlite).");
 
             if (config.DatabaseUrl == null)
-                return Local(createLocal(), false, "Local database",
-                    "No cloud database is configured (" + AppConfig.DatabaseUrlKey + " is not set), so data is stored on this computer.");
+                return Local(createLocal(), false,
+                    "Using the database on this computer (" + AppConfig.DatabaseUrlKey + " is not set).");
 
             try
             {
                 Database cloud = createCloud(config.DatabaseUrl);
                 cloud.Initialize();   // connects (TLS + login) and creates any missing tables; throws if unreachable
-                // Deliberately no host name: the header can end up in screenshots and reports.
-                return new DatabaseSelection(cloud, true, false, "Cloud database",
-                    "Connected to the shared cloud database. Everyone using the app sees the same data.");
+                // Deliberately no host name anywhere in the text: it can end up in screenshots.
+                return new DatabaseSelection(cloud, true, false, "Connected to the shared database.");
             }
             catch (Exception ex)
             {
@@ -99,13 +100,11 @@ namespace PetSitters.Services
                 // Close anything the failed attempt left in the pool (a session can
                 // be open if it connected and then failed the schema step).
                 MySqlConnector.MySqlConnection.ClearAllPools();
-                bool connectivity = IsConnectivityFailure(ex);
                 return Local(createLocal(), true,
-                    connectivity ? "Offline: local database" : "Cloud database error: local database",
-                    (connectivity ? "Couldn't connect to the cloud database: " : "Connected to the cloud database, but couldn't prepare it: ") +
-                    DescribeFailure(ex) + ". " +
-                    "Using the local database instead: changes are saved on this computer only and " +
-                    "won't be seen by other users. Restart the app to try the cloud database again.");
+                    (IsConnectivityFailure(ex)
+                        ? "Couldn't connect to the server: "
+                        : "Connected to the server, but couldn't set up the database: ") +
+                    DescribeFailure(ex) + ".");
             }
         }
 
@@ -128,9 +127,9 @@ namespace PetSitters.Services
             return false;
         }
 
-        private static DatabaseSelection Local(Database database, bool fellBack, string summary, string detail)
+        private static DatabaseSelection Local(Database database, bool fellBack, string detail)
         {
-            return new DatabaseSelection(database, false, fellBack, summary, detail);
+            return new DatabaseSelection(database, false, fellBack, detail);
         }
 
         /// <summary>

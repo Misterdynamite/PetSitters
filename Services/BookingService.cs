@@ -67,9 +67,8 @@ namespace PetSitters.Services
 
             if (clash != null)
                 return BookingResult.Fail(
-                    $"This request overlaps a booking you have already accepted " +
-                    $"({clash.StartDate:d MMM yyyy} – {clash.EndDate:d MMM yyyy}). " +
-                    "It has not been accepted and will stay pending.");
+                    $"This request overlaps a booking you've already accepted " +
+                    $"({clash.StartDate:d MMM yyyy} - {clash.EndDate:d MMM yyyy}). It will stay pending.");
 
             // Pending -> Accepted only if it's STILL pending: the owner may have
             // cancelled it from another computer since this sitter's list loaded.
@@ -108,7 +107,7 @@ namespace PetSitters.Services
         {
             Booking booking = _bookings.GetById(bookingId);
             if (booking == null || booking.SitterUserId != sitterUserId)
-                return BookingResult.Fail("Booking not found, or you are not the sitter for this booking.");
+                return BookingResult.Fail("That booking could not be found.");   // same wording as the other guards
             // Only accepted bookings are listed under My Chats, so anything else
             // means the owner changed it in the meantime.
             if (booking.Status != BookingStatus.Accepted)
@@ -129,19 +128,23 @@ namespace PetSitters.Services
         {
             // Lost the race in the conditional UPDATE itself: re-read to report the new state.
             Booking now = _bookings.GetById(bookingId);
-            return Stale(now == null ? "removed" : now.Status.ToString().ToLowerInvariant());
+            return now == null ? Stale("This booking no longer exists.") : ChangedElsewhere(now.Status);
         }
 
         private static BookingResult ChangedElsewhere(BookingStatus current)
         {
-            return Stale(current.ToString().ToLowerInvariant());
+            // Nothing moves back to Pending, so from the UI this is always a booking
+            // that has moved on ("already been declined"). The one Pending case is a
+            // sitter cancel on a not-yet-accepted booking, which My Chats never lists.
+            return Stale(current == BookingStatus.Pending
+                ? "This booking hasn't been accepted yet."
+                : $"This booking has already been {current.ToString().ToLowerInvariant()}.");
         }
 
-        private static BookingResult Stale(string state)
+        private static BookingResult Stale(string what)
         {
-            return BookingResult.Stale(
-                $"This booking was changed before your action was saved (it is now {state}). " +
-                "The lists have been refreshed.");
+            // The view reloads its list on a stale result, so say that it has.
+            return BookingResult.Stale(what + " Your list has been updated.");
         }
 
         /// <summary>
@@ -173,9 +176,11 @@ namespace PetSitters.Services
                 string who = booking.PetId.HasValue && clash.PetId.HasValue
                     ? "This pet already has"
                     : "One of these pets already has";
+                // Only pending or accepted can clash (IsActive): "a pending", "an accepted".
+                string status = clash.Status == BookingStatus.Accepted ? "an accepted" : "a pending";
                 return BookingResult.Fail(
-                    $"{who} a {clash.Status.ToString().ToLowerInvariant()} booking " +
-                    $"({clash.StartDate:d MMM yyyy} – {clash.EndDate:d MMM yyyy}) that overlaps these dates. " +
+                    $"{who} {status} booking " +
+                    $"({clash.StartDate:d MMM yyyy} - {clash.EndDate:d MMM yyyy}) that overlaps these dates. " +
                     "Cancel it under My Bookings or choose different dates.");
             }
 

@@ -131,20 +131,39 @@ Services/   PasswordHasher (PBKDF2), ValidationHelper, AuthService (+AuthResult)
 Views/      WPF UserControls, one per screen, swapped into MainWindow
 ```
 
-- Startup (`App.xaml.cs`): `MainWindow` opens immediately showing "Connecting to the
-  database…"; `AppServices.CreateDefault()` runs on a background thread
-  (`Task.Run`), where `DatabaseSelector` picks the database; then
-  `MainWindow.Attach(services)` shows the login screen. MainWindow swaps views
-  (login → register → role dashboard).
+- Startup (`App.xaml.cs`): `MainWindow` opens immediately showing "Loading...";
+  `AppServices.CreateDefault()` runs on a background thread (`Task.Run`), where
+  `DatabaseSelector` picks the database; then `MainWindow.Attach(services)` shows
+  the login screen (that is all it does). MainWindow swaps views
+  (login → register → role dashboard). If the local database can't be opened, the
+  app says "Sitters4Us couldn't start because its database couldn't be opened"
+  (plus the exception type) and exits with code 1.
 - The database is chosen **once per launch** — no switching or syncing afterwards;
-  restart the app to retry the cloud. The header's `StorageStatus` shows
-  "☁ Cloud database", "Local database", "⚠ Offline: local database" (couldn't
-  connect) or "⚠ Cloud database error: local database" (connected, schema step
-  failed). The tooltip never shows host, URL, user or password. In fallback the login
-  screen shows an amber notice that cloud accounts won't work.
+  restart the app to retry the cloud. **The UI shows no database status.** The
+  header's right side holds only the session bar ("Signed in as … (Role)" + Log
+  out) once logged in. The only database-related UI is the login screen's
+  `OfflineNotice`, shown only when `DatabaseSelection.FellBack` is true: "Working
+  offline. Only accounts on this computer will work, and your changes won't reach
+  other users. Restart the app to reconnect." Both fallback cases use that wording; the distinction lives only in
+  its tooltip, `DatabaseSelection.Detail`: "Couldn't connect to the server:
+  <reason>." vs "Connected to the server, but couldn't set up the database:
+  <reason>." (`<reason>` is `DatabaseSelector.DescribeFailure`: fixed wording and
+  error codes, never host, URL, user or password).
+  *Reversed 2026-10-09:* the header used to show a status for every launch ("☁ Cloud
+  database", "Local database", "⚠ Offline: local database", "⚠ Cloud database
+  error: local database") with a tooltip, plus a longer amber notice on the login
+  screen, because the local fallback doesn't sync and users should always see which
+  store they were on. Retired by the decision that the UI shouldn't advertise which
+  database or infrastructure is in use. Still stands: the login screen warns in the
+  one case that matters (fallback), and the offline-vs-error distinction is kept in
+  the notice's tooltip.
 - `App.DispatcherUnhandledException` turns mid-session database exceptions into a
-  message ("couldn't reach its database" vs "couldn't save this change … report this
-  code: …") instead of a crash; exception text is never shown. Pooled MySQL
+  message box titled "Sitters4Us" instead of a crash; exception text is never shown.
+  Connectivity/transient errors read "Couldn't connect to the server. Your last
+  change may not have been saved. …" on the cloud database, "Couldn't reach the
+  database. …" on the local one; anything else reads "Something went wrong. If you
+  were saving a change, check what you entered and try again. Error code: <code>"
+  (e.g. `MySQL 1406 (DataTooLong)`, `SQLite Constraint`). Pooled MySQL
   connections are closed on exit (`ClearAllPools`).
 - Roles: `UserRole.Owner` / `UserRole.Sitter`. `AppServices.CurrentUser` is the
   session.
@@ -232,7 +251,8 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 - **UI regression suite fails at the default window size (since the login/register
   redesign, 503e9af/6f33d67).** The 920×640 window clips the password box off
   screen, so FlaUI throws `NoClickablePointException`. All 8 UI tests pass with the
-  window maximised (checked 2026-10-07). Fix the layout (or add a ScrollViewer)
+  window maximised (checked again on 2026-10-09, after the header status was removed
+  and the UI wording simplified). Fix the layout (or add a ScrollViewer)
   rather than maximising in the driver, because real users hit the same clipping.
 - **No sync between the cloud and local stores**, and existing local data is not
   migrated to the cloud. A fallback session's data stays on that PC.

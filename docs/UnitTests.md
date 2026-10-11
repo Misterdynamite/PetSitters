@@ -12,11 +12,11 @@ requirements traceability matrix, and how to run everything.
   `DATABASE_URL` into a connection string).
 - **Result:** **148 test methods → 288 executed cases on SQLite** (the
   difference is `[DataRow]` data-driven expansion). All passing (last run
-  2026-10-07).
+  2026-10-09).
 - **Plus, opt-in:** **121 MySQL parity cases** that re-run the database tests
   against a real MySQL server. All 121 passing against the real server on
-  2026-10-07 (on a rerun: the run before it lost 3 cases to network timeouts;
-  see [CI.md](CI.md#mysql-parity-tests-opt-in)). They are skipped unless you ask
+  2026-10-09 (and on 2026-10-07, on a rerun: the run before it lost 3 cases to
+  network timeouts; see [CI.md](CI.md#mysql-parity-tests-opt-in)). They are skipped unless you ask
   for them (see
   [MySQL parity](#mysql-parity-opt-in)).
 - **Not covered here:** end-to-end GUI behaviour lives in the separate
@@ -57,8 +57,8 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
 | Lab | Technique | Where it appears |
 |-----|-----------|------------------|
 | 1 | MSTest, AAA structure, `Method_Scenario_ExpectedResult` naming, invalid-input tests | Every test |
-| 1 / 2 | Security testing (salting, no plaintext, no user enumeration, the database password never shown in an error or tooltip) | `PasswordHasherTests`, `AuthServiceTests`, `DatabaseConfigurationTests`, `DatabaseSelectorTests` |
-| 2 | Result-object assertions (`AuthResult.Success` / `ErrorMessage`, `DatabaseSelection.Summary` / `FellBack`) | `AuthServiceTests`, `DatabaseSelectorTests` |
+| 1 / 2 | Security testing (salting, no plaintext, no user enumeration, the database password never shown in an error or the offline notice's tooltip) | `PasswordHasherTests`, `AuthServiceTests`, `DatabaseConfigurationTests`, `DatabaseSelectorTests` |
+| 2 | Result-object assertions (`AuthResult.Success` / `ErrorMessage`, `DatabaseSelection.UsingCloud` / `FellBack` / `Detail`) | `AuthServiceTests`, `DatabaseSelectorTests` |
 | 4 | Each test tagged to a requirement ID (traceability) | Class summaries + RTM below |
 | 5 | Equivalence partitioning + boundary-value analysis | `ValidationHelperTests`, `BookingCalculationTests`, `DatabaseConfigurationTests` (1–60 s connect timeout, `PETSITTERS_DB` modes) |
 | 5 | Data-driven tests with `[DataRow]` | `ValidationHelperTests`, `BookingCalculationTests`, `DatabaseConfigurationTests`, parts of `AuthServiceTests` |
@@ -198,7 +198,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `DeclineRequest_Pending_IsDeclined` | REQ-PS-03: declining now goes through the service. |
 | `DeclineRequest_AfterTheOwnerCancelled_IsRefused_AndStaysCancelled` | Shared database: the owner acted first, so the sitter's decline changes nothing, and the result is flagged `ChangedElsewhere` so the view reloads its stale list. |
 | `AcceptRequest_AfterTheOwnerCancelled_ReportsChangedElsewhere` | The same for accepting: the sitter's list still showed the request as pending; nothing changes and the result is flagged `ChangedElsewhere`. |
-| `CancelBooking_AfterTheSitterDeclined_ReportsChangedElsewhere` | The same for the owner: the message says what the booking is now ("it is now declined"). |
+| `CancelBooking_AfterTheSitterDeclined_ReportsChangedElsewhere` | The same for the owner: the message says what the booking is now ("already been declined"). |
 | `DeclineRequest_NotYours_IsAPlainRefusal` | Security: someone else's booking is refused but NOT flagged `ChangedElsewhere`, so it gives no reload hint about a booking that isn't theirs. |
 | `DeclineRequest_ForAnotherSittersBooking_IsRefused` | Authorisation: only the booking's sitter can decline. |
 | `CancelAsSitter_OnlyFromAccepted` `[DataRow ×3]` | The sitter's cancel (My Chats) works only on an accepted booking. |
@@ -320,18 +320,28 @@ database is opened.
 Covers `DatabaseSelector`, the launch-time choice. The cloud database is passed
 in as a factory, so "cloud reachable" is simulated with a temp SQLite file and
 "cloud unreachable" uses the real MySQL driver against a closed local port,
-which is refused (after about 2 s on Windows, which retries a refused connection). The header text asserted here is what the user sees.
+which is refused (after about 2 s on Windows, which retries a refused connection). What the user sees comes from two properties asserted here: `FellBack` decides whether the login screen shows its offline notice, and `Detail` is that notice's tooltip (the reason).
 
 | Test | What it verifies (technique) | Cases |
 |------|------------------------------|-------|
-| `Select_CloudReachable_UsesCloud` | The cloud database is used when it initialises; header "Cloud database", not flagged as a fallback (Smoke) | 1 |
-| `Select_CloudUnreachable_FallsBackToLocal_AndExplains` | The core rule: a refused connection opens the local database, header "Offline: local database", and the tooltip says changes won't be seen by other users without naming the server (Smoke) | 1 |
-| `Select_FailureAfterConnecting_IsReportedAsError_NotOffline` | Error handling: a failure after connecting (e.g. creating tables) still falls back, but reads "Cloud database error: local database" so a real bug isn't passed off as a network problem | 1 |
+| `Select_CloudReachable_UsesCloud` | The cloud database is used when it initialises (`UsingCloud`), not flagged as a fallback, so no offline notice (Smoke) | 1 |
+| `Select_CloudUnreachable_FallsBackToLocal_AndExplains` | The core rule: a refused connection opens the local database, flagged as a fallback (the login screen shows the offline notice), and the reason starts "Couldn't connect to the server" without naming the server (Smoke) | 1 |
+| `Select_FailureAfterConnecting_IsReportedAsError_NotOffline` | Error handling: a failure after connecting (e.g. creating tables) still falls back with the same notice, but the reason starts "Connected to the server, but couldn't set up the database" so a real bug isn't passed off as a network problem | 1 |
 | `IsConnectivityFailure_Classification` | Equivalence partitioning of failures: bad URL, socket error, timeout (bare or wrapped by the driver) and a failed TLS handshake mean "couldn't connect"; anything else is a real error | 6 |
-| `Select_CloudFailureMessage_NeverContainsThePassword` | Security: even if a driver error echoes the URL and password, the tooltip contains neither | 1 |
-| `Select_MalformedUrl_FallsBackToLocal` | Invalid input: a non-`mysql://` `DATABASE_URL` doesn't stop the app opening, and the tooltip names the expected form | 1 |
-| `Select_ForcedLocal_NeverTriesTheCloud` | `PETSITTERS_DB=sqlite`: the cloud is never attempted; header "Local database", not a fallback | 1 |
+| `Select_CloudFailureMessage_NeverContainsThePassword` | Security: even if a driver error echoes the URL and password, the reason (the notice's tooltip) contains neither | 1 |
+| `Select_MalformedUrl_FallsBackToLocal` | Invalid input: a non-`mysql://` `DATABASE_URL` doesn't stop the app opening, and the reason names the expected form | 1 |
+| `Select_ForcedLocal_NeverTriesTheCloud` | `PETSITTERS_DB=sqlite`: the cloud is never attempted; local database, not flagged as a fallback (no offline notice) | 1 |
 | `Select_NoUrl_UsesLocalWithoutWarning` | No `DATABASE_URL`: local database, no warning, cloud never attempted | 1 |
+
+*Changed 2026-10-09:* these tests used to assert a header label
+(`DatabaseSelection.Summary`) naming the database in use, and the tooltip
+sentence about other users. The label and `Summary` were removed because the
+user asked that the UI not advertise which database is in use. Its original
+reason (the local fallback doesn't sync, so users should always see which
+store they're on) is retired by that decision. What still stands, and is
+asserted instead: the login screen warns in the one case that matters (a
+fallback, `FellBack`), and the offline-vs-error distinction is kept in the
+`Detail` reason.
 
 *Removed:* `Redact_RemovesUrlAndPassword` (2 cases), with the `Redact` method it
 tested. Every tooltip reason is now fixed wording, so there is nothing to
@@ -342,7 +352,7 @@ the password never appears.
 ### MySQL parity (opt-in)
 
 **9 classes / 121 cases · REQ-GR-09 · all passing against the real server on
-2026-10-07 (4 m 15 s).** Network stalls show up as timeout failures, not wrong
+2026-10-09 (4 m 18 s).** Network stalls show up as timeout failures, not wrong
 answers; the run history is in [CI.md](CI.md#mysql-parity-tests-opt-in).
 
 `MySqlParityTests.cs` defines nine `[TestClass, TestCategory("MySql")]`
@@ -419,7 +429,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
-| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (121 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-07) |
+| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (121 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-09) |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
@@ -429,8 +439,13 @@ when a requirement changes, quickly find the tests that must be reviewed.
 > REQ-GR-09 is a **proposed** requirement ID, not yet in the report. The tests
 > are already tagged with it so the link holds once it is added. Its UI evidence
 > is `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` (an
-> unreachable cloud URL opens on the local database, says so in the header, and
-> registration still works) and `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase`.
+> unreachable cloud URL opens on the local database, the login screen shows the
+> "Working offline" notice, and registration still works) and
+> `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` (choosing the local
+> database on purpose shows no offline notice; renamed on 2026-10-09 from
+> `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` when the header label
+> was removed). Both passed on 2026-10-09 with the window maximised (see
+> [CI.md](CI.md)).
 
 ---
 
@@ -438,7 +453,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 
 | Attribute | Evidence in the suite |
 |-----------|-----------------------|
-| **Security** | Salted PBKDF2 hashing, no plaintext storage, no user enumeration, per-booking chat isolation; the database password never appears in an error message or the header tooltip, and an unspecified ssl-mode still requires TLS. |
+| **Security** | Salted PBKDF2 hashing, no plaintext storage, no user enumeration, per-booking chat isolation; the database password never appears in an error message or the offline notice's tooltip, and an unspecified ssl-mode still requires TLS. |
 | **Functional correctness** | Registration/login rules, booking visibility, cost calculations. |
 | **Reliability** | Bookings and messages persist and read back intact; status changes are durable; the app still opens (on the local database) when the cloud database is unreachable or misconfigured. |
 | **Portability (database engines)** | The same 121 data-layer cases pass on SQLite and on MySQL (opt-in parity run). |
@@ -465,7 +480,7 @@ MySQL parity subclasses inherit their base class's labels and add `MySql`.
 | `System` | Drives the real `PetSitters.exe` end to end through UI Automation (FlaUI). |
 | `Acceptance` | System tests that walk a requirement's acceptance criteria (REQ-xx-nn) as a user would. |
 | `Regression` | Re-run after every build to catch breakage: the whole UI suite, plus both migration (data-loss guard) tests. |
-| `Security` | Hashing/salting, no plaintext, no user enumeration, data isolation and authorisation (acting on someone else's data), and the database password never appearing in errors or the tooltip. |
+| `Security` | Hashing/salting, no plaintext, no user enumeration, data isolation and authorisation (acting on someone else's data), and the database password never appearing in errors or the offline notice's tooltip. |
 | `Performance` | Checked against a budget: sign-in time (< 1 s, REQ-NFR-02), or database round trips (a list loads in ONE query, counted by `Database.ConnectionsOpened`, since round trips decide speed on the cloud database). |
 | `Usability` | Checks the user is told what to do (specific validation messages, the Owner/Sitter prompt). |
 | `Smoke` | The 12-case sanity slice through the core journey and the launch-time database choice, run first by the build and CI (see [CI.md](CI.md)). SQLite only: the gate's filter is `TestCategory=Smoke&TestCategory!=MySql`. |
@@ -520,12 +535,15 @@ rows are labelled with each kind they contain.
   (`Database.ConnectionsOpened`).
 - **MySQL parity is not in the build gate or CI.** It is opt-in, so a
   MySQL-only regression is caught only when someone runs it (last run
-  2026-10-07, 121/121 passing). It also depends on the network: two runs that
-  day lost cases to connection timeouts and passed when re-run.
+  2026-10-09, 121/121 passing, after the wording changes that altered two
+  inherited `BookingServiceTests` message assertions). It also depends on the
+  network: two runs on 2026-10-07 lost cases to connection timeouts and passed
+  when re-run.
 - **The real cloud path at launch is not automated.** `DatabaseSelectorTests`
   simulate a reachable cloud with SQLite, and the UI tests only exercise the
   local and unreachable cases. Launching against the real cloud database was
-  checked by hand (the cloud header appeared about 2.4 s after launch).
+  checked by hand (the login screen appeared about 2.4 s after launch on the
+  cloud database).
 - **Not tested:** the mid-session database-failure message
   (`App.DispatcherUnhandledException`), and the build step that copies `.env`
   next to the app.
@@ -702,5 +720,5 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `UiRegressionTests` | `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | 1 | System, Acceptance, Usability, Regression | Positive, Negative |
 | `UiRegressionTests` | `BookingForm_InvalidRequests_AreRejectedWithSpecificMessages` | 1 | System, Acceptance, Usability, Regression | Positive, Boundary, InvalidInput |
 | `UiRegressionTests` | `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | 1 | System, Acceptance, Regression | ErrorHandling, Negative |
-| `UiRegressionTests` | `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` | 1 | System, Regression | Positive |
+| `UiRegressionTests` | `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` | 1 | System, Regression | Positive |
 | `UiRegressionTests` | `Login_WithUnknownCredentials_ShowsGenericErrorAndStaysOnLogin` | 1 | System, Security, Regression | Negative, ErrorHandling |

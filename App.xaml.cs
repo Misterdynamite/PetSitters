@@ -8,8 +8,8 @@ using PetSitters.Services;
 namespace PetSitters
 {
     /// <summary>
-    /// Application entry point. Shows the main window straight away in a
-    /// "connecting" state, picks the database in the background (cloud MySQL
+    /// Application entry point. Shows the main window straight away showing
+    /// "Loading...", picks the database in the background (cloud MySQL
     /// first, local SQLite if that fails), then hands the services to the window.
     /// </summary>
     public partial class App : Application
@@ -28,7 +28,7 @@ namespace PetSitters
             {
                 // Connecting to the cloud server can take seconds (TLS over the
                 // internet, or the full timeout when offline), so it must not
-                // freeze the UI thread. The window shows "Connecting…" meanwhile.
+                // freeze the UI thread. The window shows "Loading..." meanwhile.
                 _services = await Task.Run(() => AppServices.CreateDefault());
             }
             catch (Exception ex)
@@ -36,7 +36,7 @@ namespace PetSitters
                 // Only reachable if even the LOCAL database can't be opened (e.g.
                 // %AppData% not writable): nothing to fall back to, so say so and exit.
                 MessageBox.Show(window,
-                    "Sitters4Us couldn't open its local database, so it can't start.\n\n" + ex.GetType().Name,
+                    "Sitters4Us couldn't start because its database couldn't be opened.\n\nError: " + ex.GetType().Name,
                     "Sitters4Us", MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown(1);
                 return;
@@ -82,20 +82,17 @@ namespace PetSitters
                 // The pool may be holding a dead connection (sleep, Wi-Fi change,
                 // server timeout); drop it so the user's retry gets a fresh one.
                 MySqlConnector.MySqlConnection.ClearAllPools();
-                message = "Sitters4Us couldn't reach its database, so your last action may not have been saved." +
-                          (cloud
-                              ? "\n\nCheck your internet connection and try again. If it keeps happening, restart the app: " +
-                                "it will use this computer's local database if the cloud one is still unavailable."
-                              : "\n\nTry again, and restart the app if it keeps happening.");
+                message = cloud
+                    ? "Couldn't connect to the server. Your last change may not have been saved.\n\nCheck your internet connection and try again."
+                    : "Couldn't reach the database. Your last change may not have been saved.\n\nPlease try again.";
             }
             else
             {
-                message = "The database couldn't complete that action.\n\n" +
-                          "If you were saving something, check what you entered and try again. " +
-                          "If it keeps happening, report this code: " + ErrorCode(e.Exception) + ".";
+                message = "Something went wrong. If you were saving a change, check what you entered and try again.\n\n" +
+                          "Error code: " + ErrorCode(e.Exception);
             }
 
-            MessageBox.Show(MainWindow, message, "Database problem", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(MainWindow, message, "Sitters4Us", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         /// <summary>True if the exception, or anything it wraps, came from the database or the network.</summary>

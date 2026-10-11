@@ -12,7 +12,7 @@
     <DockPanel>
         <!-- Top header (unified with LoginView header) -->
         <Border DockPanel.Dock="Top" Background="{StaticResource LoginPaletteDark}" Height="72">
-            <!-- Two columns, so the right-hand status/session area never draws over the
+            <!-- Two columns, so the right-hand session area never draws over the
                  logo at the default 920 px width; the logo column gives way instead. -->
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -25,10 +25,6 @@
                     <Image Source="/Assets/Images/Paw2.png" Height="56" Width="336" Margin="8,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,20,0">
-                    <!-- Which database is in use (cloud MySQL or local SQLite fallback); the reason is in the tooltip. -->
-                    <TextBlock x:Name="StorageStatus" Text="Connecting…" Foreground="{StaticResource LoginPalettePale}"
-                               VerticalAlignment="Center" Margin="0,0,16,0" FontWeight="SemiBold"
-                               ToolTipService.ShowDuration="20000"/>
                     <StackPanel x:Name="SessionBar" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
                         <TextBlock x:Name="SessionText" Foreground="{StaticResource LoginPalettePale}" VerticalAlignment="Center"
                                    Margin="0,0,12,0"/>
@@ -39,9 +35,9 @@
             </Grid>
         </Border>
 
-        <!-- Active view is swapped in here. Until the database is ready it shows the connecting message. -->
+        <!-- Active view is swapped in here. Until the database is ready (a second or two at launch) it shows "Loading...". -->
         <ContentControl x:Name="RootContent">
-            <TextBlock x:Name="ConnectingText" Text="Connecting to the database…" FontSize="18"
+            <TextBlock x:Name="ConnectingText" Text="Loading..." FontSize="18"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
         </ContentControl>
     </DockPanel>

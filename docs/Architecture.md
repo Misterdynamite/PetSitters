@@ -28,8 +28,9 @@ which is chosen once at launch**:
   (`PETSITTERS_DB=sqlite`), or when it can't be reached at launch. It needs no
   server or internet connection, but nothing in it is shared.
 
-The window header always says which store is in use. There is no switching or
-syncing after launch (§5).
+The window doesn't say which store is in use; the login screen shows a notice
+only when the app has fallen back to the local database (§5.1). There is no
+switching or syncing after launch (§5).
 
 ### Technology stack
 
@@ -52,7 +53,7 @@ PetSitters.sln
 ├── PetSitters/                 The WPF application (assembly "PetSitters")
 │   ├── App.xaml(.cs)           Startup: opens MainWindow, picks the database in the
 │   │                           background, attaches AppServices; global database-error handler
-│   ├── MainWindow.xaml(.cs)    Shell: header (logo, database status, session bar) + swaps the active view
+│   ├── MainWindow.xaml(.cs)    Shell: header (logo, session bar) + swaps the active view
 │   ├── Models/                 Plain data objects (POCOs)
 │   ├── Data/                   Database (SQLite or MySQL), SqlDialect, MySqlUrl + one repository per table
 │   ├── Services/               UI-independent logic (auth, booking rules, validation, hashing,
@@ -73,7 +74,7 @@ both MySQL and SQLite.
 ```mermaid
 flowchart TD
     subgraph UI["Views (WPF)"]
-        MW["MainWindow shell + database status"]
+        MW["MainWindow shell + session bar"]
         LV[LoginView / RegisterView]
         OD[OwnerDashboardView]
         SD[SitterDashboardView]
@@ -116,8 +117,8 @@ flowchart TD
     DB -->|"fallback"| SQLiteFile[(petsitters.db)]
 ```
 
-- **`App.xaml.cs`** shows `MainWindow` straight away in a "Connecting to the
-  database…" state, runs `AppServices.CreateDefault()` on a background thread
+- **`App.xaml.cs`** shows `MainWindow` straight away in a "Loading..." state,
+  runs `AppServices.CreateDefault()` on a background thread
   (`Task.Run`, because a cloud connection can take seconds), then calls
   `MainWindow.Attach(services)`. It also installs the global database-error
   handler and closes pooled cloud connections on exit (§5.5).
@@ -129,9 +130,10 @@ flowchart TD
   `new AppServices(database)` with a temporary SQLite file instead.
 - **`MainWindow`** hosts a `ContentControl` and swaps `UserControl` views:
   login → register → an owner or sitter dashboard depending on `CurrentUser.Role`.
-  `Attach` fills the header's database status (`StorageStatus`, on the right of
-  the header before the session bar; the header grid has two columns so it
-  doesn't overlap the logo) and then shows the login screen.
+  `Attach` just shows the login screen. The right of the header holds only the
+  session bar ("Signed in as … (Role)" + Log out), shown once someone is signed
+  in; the header grid has two columns so it doesn't overlap the logo. The header
+  used to show which database was in use; that was removed (§5.1).
 
 ---
 
@@ -139,14 +141,15 @@ flowchart TD
 
 | View | Role | Tabs / purpose |
 |------|------|----------------|
-| `LoginView` | anyone | Email + password login (asks Owner/Sitter if both accounts match); amber notice when running on the local fallback |
+| `LoginView` | anyone | Email + password login (asks Owner/Sitter if both accounts match); offline notice when running on the local fallback (§5.1) |
 | `RegisterView` | anyone | Create an Owner or Sitter account (personal details incl. location) |
 | `OwnerDashboardView` | Owner | **My Details** · **My Pets** · **Find Sitters** (browse + request booking) · **Chats** · hidden **Chat** panel · **My Bookings** (status + cancel) |
 | `SitterDashboardView` | Sitter | **My Details** · **My Sitting Profile** (availability, experience, rate…) · **Booking Requests** (accept/decline) · **My Chats** · hidden **Chat** panel |
 | `JobDetailsWindow` | Sitter | Pop-up showing a request's full pet + owner details before deciding |
 
-Every screen sits under the `MainWindow` header, which shows the database in
-use (§5.1).
+Every screen sits under the `MainWindow` header (logo, plus the session bar once
+signed in). Only the login screen mentions the database, and only on the local
+fallback (§5.1).
 
 ---
 
@@ -284,39 +287,44 @@ launch** by `Services/DatabaseSelector.cs`; nothing switches or syncs afterwards
 
 ```mermaid
 flowchart TD
-    START(["PetSitters.exe launched"]) --> SHOW["UI thread: MainWindow.Show()<br/>header 'Connecting…', body 'Connecting to the database…'"]
+    START(["PetSitters.exe launched"]) --> SHOW["UI thread: MainWindow.Show()<br/>body 'Loading...'"]
     SHOW --> BG["Background thread (Task.Run): AppServices.CreateDefault()<br/>AppConfig.Load: environment variables override the .env beside the exe"]
     BG --> FORCED{"PETSITTERS_DB = sqlite?"}
-    FORCED -- yes --> LOCAL["Local SQLite<br/>'Local database'"]
+    FORCED -- yes --> LOCAL["Local SQLite<br/>FellBack = false"]
     FORCED -- no --> URLSET{"DATABASE_URL set?"}
     URLSET -- no --> LOCAL
     URLSET -- yes --> TRY["MySqlUrl.ToConnectionString, Database.ForMySql<br/>Initialize(): connect (TLS + login), check tables, create any missing"]
-    TRY -- success --> CLOUD["MySQL<br/>'☁ Cloud database'"]
-    TRY -- "couldn't connect" --> OFF["Local SQLite<br/>'⚠ Offline: local database'"]
-    TRY -- "connected, schema step failed" --> ERR["Local SQLite<br/>'⚠ Cloud database error: local database'"]
-    LOCAL --> ATTACH["UI thread: MainWindow.Attach(services)<br/>header status + tooltip"]
+    TRY -- success --> CLOUD["MySQL<br/>FellBack = false"]
+    TRY -- "couldn't connect" --> OFF["Local SQLite, FellBack = true<br/>Detail: Couldn't connect to the server: reason"]
+    TRY -- "connected, schema step failed" --> ERR["Local SQLite, FellBack = true<br/>Detail: Connected to the server, but couldn't set up the database: reason"]
+    LOCAL --> ATTACH["UI thread: MainWindow.Attach(services)<br/>shows the login screen"]
     CLOUD --> ATTACH
     OFF --> ATTACH
     ERR --> ATTACH
-    ATTACH --> LOGIN["LoginView<br/>amber notice if the app fell back"]
+    ATTACH --> LOGIN["LoginView<br/>offline notice (Detail on hover) only if FellBack"]
 ```
 
 Connecting and creating the schema **is** the reachability check: there is no
 separate ping. `Database.Initialize()` runs its work once per instance, so when
 `AppServices` calls it again on the chosen database it costs nothing.
 
-| Situation | Header (`StorageStatus`) | Store |
-|-----------|--------------------------|-------|
-| `PETSITTERS_DB=sqlite` (or `local`) | Local database | SQLite |
-| No `DATABASE_URL` | Local database | SQLite |
-| Connected and schema ready | **☁ Cloud database** | MySQL |
-| Couldn't connect: offline, DNS, timeout, refused, wrong password, unknown database, malformed URL | **⚠ Offline: local database** (warning colour) | SQLite |
-| Connected, but the schema step failed | **⚠ Cloud database error: local database** (warning colour) | SQLite |
+| Situation | Login screen | `DatabaseSelection.Detail` | Store |
+|-----------|--------------|----------------------------|-------|
+| `PETSITTERS_DB=sqlite` (or `local`) | No notice | Using the database on this computer (PETSITTERS_DB is set to sqlite). | SQLite |
+| No `DATABASE_URL` | No notice | Using the database on this computer (DATABASE_URL is not set). | SQLite |
+| Connected and schema ready | No notice | Connected to the shared database. | MySQL |
+| Couldn't connect: offline, DNS, timeout, refused, wrong password, unknown database, malformed URL | **Offline notice** | Couldn't connect to the server: *reason*. | SQLite |
+| Connected, but the schema step failed | **Offline notice** | Connected to the server, but couldn't set up the database: *reason*. | SQLite |
 
-The two fallback cases are told apart on purpose, so a real database error isn't
-passed off as being offline. The header's tooltip explains the choice in fixed
-wording plus an error code where one exists (e.g. "the server couldn't be
-reached (offline, blocked, or timed out)", or "MySQL error 1064 (ParseError)").
+`Detail` is only displayed in the two fallback rows, as the notice's tooltip;
+in the other rows nothing on screen refers to the database.
+
+Both fallback cases show the same notice above the login form: "Working
+offline. Only accounts on this computer will work, and your changes won't reach
+other users. Restart the app to reconnect." They are still told apart on purpose, so a real database error isn't
+passed off as being offline: the notice's tooltip says which case it was, then
+gives the reason in fixed wording plus an error code where one exists (e.g. "the server couldn't be reached (offline,
+blocked, or timed out)", or "MySQL error 1064 (ParseError)").
 It **never** shows the host name, URL, user name or password: raw driver
 messages are not displayed because they can name the server and the user, and
 every reason is fixed text (`DatabaseSelector.DescribeFailure`), so there is
@@ -325,16 +333,27 @@ nothing to redact. *Reversed:* an earlier version also ran the text through a
 every substring equal to the password could itself reveal a short password
 inside the fixed wording, and with fixed wording it protected nothing, so it
 was removed. A failed TLS handshake is looked for first, because the driver
-wraps it as "unable to connect": the tooltip then says the secure connection
+wraps it as "unable to connect": the reason then says the secure connection
 failed and points at `ssl-mode` / `ssl-ca` instead of claiming the app was
-offline. On a fallback the
-login screen also shows an amber notice: cloud accounts won't work here and
-nothing created will be shared. **Restart the app to try the cloud database
-again.**
+offline. **Restart the app to try the cloud database again.**
 
-**Measured:** the cloud header appeared about **2.4 s** after launch. In the UI
-test, with an unreachable cloud URL and a 3 s connect timeout, the app opened on
-the local database in about **7 s**. The default timeout is 8 s, so a real
+*Reversed (2026-10-09): no database status in the header.* The right of the
+window header used to show which store was in use (`StorageStatus`: "Cloud
+database" or "Local database", or in the warning colour "Offline: local
+database" / "Cloud database error: local database", with the reason in its
+tooltip), and the login screen's notice was a longer warning that cloud accounts
+wouldn't work and nothing created would be shared. The reason was that the local
+fallback doesn't sync, so users should always see which store they are on. That
+was retired by a product decision: the UI shouldn't advertise which database or
+infrastructure is in use, so the header now shows only the session bar. What
+still stands: the one case that matters to a user, the fallback, is still
+flagged on the login screen, and the offline-vs-error distinction is kept in the
+notice's tooltip. What is lost: once signed in, nothing on screen says the
+session is on the local fallback.
+
+**Measured:** the login screen appeared about **2.4 s** after launch on the
+cloud database. In the UI test, with an unreachable cloud URL and a 3 s connect
+timeout, the app opened on the local database in about **7 s**. The default timeout is 8 s, so a real
 offline launch waits a little longer; the worst case is a server that accepts
 the connection and then stalls, which costs the connect timeout plus the 10 s
 command timeout.
@@ -453,10 +472,10 @@ measurement against the cloud server:
 
 | When | What happens |
 |------|--------------|
-| **At launch, the cloud database fails** | Always falls back to the local database (§5.1), and the connection pool is cleared so no half-open cloud session lingers. `DatabaseSelector.IsConnectivityFailure` decides the label: a bad URL (`FormatException`), socket, timeout, TLS (`AuthenticationException`) or I/O error, or a MySQL connection-level error (unable to connect, access denied, unknown database, too many connections, host not allowed, command timeout or interrupted query) means **Offline**; anything else means **Cloud database error**. |
-| **At launch, the local database can't be opened either** (e.g. `%AppData%` not writable) | Nothing is left to fall back to: a message box says the local database couldn't be opened (exception type name only) and the app exits with code 1. |
-| **Mid-session, a database call throws** | `App.DispatcherUnhandledException` turns any exception whose chain contains a `DbException`, `SocketException` or `TimeoutException` into a message instead of a crash, and the app keeps running. Two kinds: connectivity or transient failures (`IsConnectivityFailure`, or MySqlConnector's `IsTransient`) say the app **"couldn't reach its database"** and the last action may not have been saved (on the cloud database: check the connection, and restart to fall back to local if it stays down), and clear the connection pool so the retry gets a fresh connection rather than the dead one; data or schema errors say **"The database couldn't complete that action"** and give a code to report, e.g. `MySQL 1406 (DataTooLong)` or `SQLite Constraint`. Exception text is never shown, because it can include server and user names. Non-database exceptions are left alone, as before. |
-| **Signing in, the dashboard fails to load** | `MainWindow.OnLoggedIn` undoes the sign-in (`CurrentUser` back to null, header reset) before the error reaches the handler above, so the header never says "Signed in" over the login screen. |
+| **At launch, the cloud database fails** | Always falls back to the local database (§5.1), and the connection pool is cleared so no half-open cloud session lingers. `DatabaseSelector.IsConnectivityFailure` decides which reason the notice's tooltip gives: a bad URL (`FormatException`), socket, timeout, TLS (`AuthenticationException`) or I/O error, or a MySQL connection-level error (unable to connect, access denied, unknown database, too many connections, host not allowed, command timeout or interrupted query) means **"Couldn't connect to the server"**; anything else means **"Connected to the server, but couldn't set up the database"**. The notice itself is the same either way. |
+| **At launch, the local database can't be opened either** (e.g. `%AppData%` not writable) | Nothing is left to fall back to: a message box says "Sitters4Us couldn't start because its database couldn't be opened." with "Error: " and the exception type name only, and the app exits with code 1. |
+| **Mid-session, a database call throws** | `App.DispatcherUnhandledException` turns any exception whose chain contains a `DbException`, `SocketException` or `TimeoutException` into a message (titled "Sitters4Us") instead of a crash, and the app keeps running. Two kinds: connectivity or transient failures (`IsConnectivityFailure`, or MySqlConnector's `IsTransient`) say **"Couldn't connect to the server. Your last change may not have been saved."** plus "Check your internet connection and try again." on the cloud database, or **"Couldn't reach the database. Your last change may not have been saved."** plus "Please try again." on the local one, and clear the connection pool so the retry gets a fresh connection rather than the dead one; any other database error (data or schema) says **"Something went wrong. If you were saving a change, check what you entered and try again."** with an error code, e.g. `Error code: MySQL 1406 (DataTooLong)` or `SQLite Constraint`. Exception text is never shown, because it can include server and user names. Non-database exceptions are left alone, as before. |
+| **Signing in, the dashboard fails to load** | `MainWindow.OnLoggedIn` undoes the sign-in (`CurrentUser` back to null, session bar hidden again) before the error reaches the handler above, so the header never says "Signed in" over the login screen. |
 | **On exit** | `MySqlConnection.ClearAllPools()` closes any pooled connections politely (a protocol "quit" per session), so the shared server doesn't log an aborted connection every time someone closes the app. It runs unconditionally: a cloud attempt may have opened a session even if the app then fell back to local, or the window was closed while still connecting. |
 
 ### 5.6 Security & limitations
@@ -509,9 +528,11 @@ same rows):
   `BookingService` and `BookingRepository.TryUpdateStatus`, a single
   `UPDATE ... WHERE Id = @id AND Status IN (expected)`. If the other person acted
   first (the owner cancelled while the sitter was reading the request), the
-  update changes nothing, the user is told "This booking was changed before your
-  action was saved (it is now cancelled). The lists have been refreshed.", and
-  the stale list is reloaded (`BookingResult.ChangedElsewhere`). The same result
+  update changes nothing, the user is told "This booking has already been
+  cancelled. Your list has been updated." ("This booking no longer exists. …" if
+  the row is gone; "This booking hasn't been accepted yet. …" for a sitter cancel
+  on a still-pending booking), and the stale list is reloaded
+  (`BookingResult.ChangedElsewhere`). The same result
   comes back when the service's own guard reads the booking and finds it has
   already moved on, which is the common case: on a stale screen the guard, not
   the conditional UPDATE, is usually what notices. Accept, decline, owner cancel
@@ -564,8 +585,8 @@ same rows):
   introduced was not migrated to it. Accounts in one store don't exist in the
   other, hence the login screen's notice.
 - **No switch mid-session.** If the cloud connection drops after launch, the app
-  stays on the cloud database and actions fail with the "couldn't reach its
-  database" message until it comes back or the app is restarted.
+  stays on the cloud database and actions fail with the "Couldn't connect to the
+  server" message until it comes back or the app is restarted.
 - **Images are local-only.** Profile and pet pictures are copied to
   `%AppData%\PetSitters\UserImages` on the uploading PC and only that path is
   stored, so on the cloud database other PCs don't see them: the "pet images on
@@ -577,9 +598,10 @@ same rows):
   pooled), and queries run on the UI thread, so every click that touches the
   database pauses for its round trips. Lists are loaded with one query each (see
   "Performance on the cloud database" below), which keeps that to about a second.
-- **Notice wording.** The login screen's notice starts with "Offline" in both
-  fallback cases, including "Cloud database error"; the header and tooltip give
-  the accurate reason.
+- **Notice wording.** The login screen's notice says "Working offline" in both
+  fallback cases, including when the server was reached but the schema step
+  failed; only the notice's tooltip gives the accurate reason. (The header label
+  that used to show it was removed, §5.1.)
 
 ### 5.7 How this is verified
 
@@ -588,11 +610,13 @@ same rows):
   default port, every `ssl-mode`, `ssl-ca`), case-insensitive variable names, and
   a Security test that a malformed URL fails **without** the password in the
   error.
-- **`DatabaseSelectorTests`**: cloud reachable; a real refused connection falls
-  back as Offline; an error after connecting is reported as an error, not
-  Offline; a failed TLS handshake counts as can't-connect (its tooltip wording
-  is not asserted); the password and URL never appear in
-  the tooltip; malformed URL; forced local; no URL; connectivity classification.
+- **`DatabaseSelectorTests`**: cloud reachable (`UsingCloud`, no fallback); a
+  real refused connection falls back (`FellBack`) with a reason starting
+  "Couldn't connect to the server"; an error after connecting falls back with
+  "Connected to the server, but couldn't set up the database" rather than
+  claiming to be offline; a failed TLS handshake counts as can't-connect (its
+  reason wording is not asserted); the password and URL never appear in the
+  reason; malformed URL; forced local; no URL; connectivity classification.
 - **`LocalImagesTests`**: the image-path guard (network shares, other folders,
   `..`, device names, alternate streams, trailing dots, mixed separators).
 - **MySQL parity (`MySqlParityTests.cs`)**: nine `*_MySql` test classes inherit
@@ -601,9 +625,11 @@ same rows):
   and last result are in `docs/CI.md` → "MySQL parity tests". Strictly opt-in;
   each run uses its own throwaway database and never touches the app's (§8).
 - **UI tests**: `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo`
-  (an unreachable `DATABASE_URL` opens on the local database, says so in the
-  header, and registration still works) and
-  `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase`.
+  (an unreachable `DATABASE_URL` opens on the local database, the login screen's
+  notice says "Working offline", and registration still works) and
+  `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` (choosing the local
+  database on purpose shows no notice). Both passed on 2026-10-09, with the
+  window maximised (the known workaround for the clipped login form).
 
 Counts and the per-test list are in `docs/UnitTests.md`.
 
@@ -786,7 +812,7 @@ is applied only on acceptance.
 | Chat privacy | Messages scoped to a booking; retrieval is per-`BookingId` (enforced by the app, not the database: §5.6) |
 | Referential integrity | Foreign keys with cascade rules on both engines (SQLite `ForeignKeys=True`; MySQL InnoDB constraints) |
 | Encryption in transit | Cloud connections use TLS (`ssl-mode=REQUIRED` by default); the certificate is only verified with `VERIFY_CA` / `VERIFY_IDENTITY` (§5.6) |
-| Database credential never displayed | Header tooltip and error messages use fixed wording plus error codes; `MySqlUrl` errors never echo the URL; no raw driver text is ever shown, so nothing needs redacting (§5.1); covered by Security-category tests |
+| Database credential never displayed | The offline notice's tooltip and the error messages use fixed wording plus error codes; `MySqlUrl` errors never echo the URL; no raw driver text is ever shown, so nothing needs redacting (§5.1); covered by Security-category tests |
 | Secrets kept out of the public repository | `.env` git-ignored; `.env.example` holds placeholders only; CI Gate 0 fails if any other `.env*` / `*.env` file is tracked, or a real `mysql://user:password@host` URL appears in any tracked file (§5.2) |
 | Availability | Local fallback at launch; database errors mid-session become messages, not crashes (§5.5) |
 | Testability | Logic layer has no WPF dependency; `Database` path is injectable; `DatabaseSelector` takes injectable constructors; `DatabaseTestBase.CreateDatabase()` is virtual, so the MySQL parity classes re-run the suites on MySQL |
@@ -810,8 +836,9 @@ the local database.
 3. Build (Visual Studio or MSBuild). The build copies `.env` next to
    `PetSitters.exe`. In Visual Studio, if you created `.env` while the solution
    was open, reload the project and rebuild.
-4. Run the app: the header should read **☁ Cloud database**. If it says
-   **⚠ Offline: local database**, hover over it for the reason.
+4. Run the app: the login screen should appear with no notice above the email
+   box (the app doesn't otherwise show which database it's on). If it says
+   **Working offline**, hover over the notice for the reason.
 
 ```bash
 # Build the app (Visual Studio MSBuild); also runs the smoke + full logic suites (MySQL tests excluded)
