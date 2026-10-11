@@ -232,7 +232,10 @@ Notes:
   owner's estimated cost is stable even if the sitter later changes their rate.
 - **Foreign keys are enforced on both engines** (SQLite: `ForeignKeys=True` in
   the connection string; MySQL: named InnoDB constraints), with
-  `ON DELETE CASCADE` (and `SET NULL` for a booking's optional pet).
+  `ON DELETE CASCADE` (and `SET NULL` for a booking's optional pet). Because an
+  empty pet means "All my pets" (REQ-PO-08), the app never relies on that
+  `SET NULL` for a live booking: deleting a pet cancels its pending and accepted
+  bookings first (DEF-008, see "Owner deletes a pet" in §6).
 - **Pet age** is stored as whole years (`Age`, required) plus optional months
   (`AgeMonths`, 0–11). `Pet.AgeDisplay` renders the pair for the UI
   (e.g. "2 years 3 months", "5 months").
@@ -769,6 +772,8 @@ overlapping dates, with the same sitter or different ones. "All my pets"
 (`PetId` null) counts as every pet, so it clashes with any of that owner's
 bookings (`Booking.SharesPetWith`). Declined and cancelled bookings free the pet.
 A pending request blocks too, so to switch sitters the owner cancels it first.
+Deleting a pet cancels its live bookings, so they can't turn into "All my pets"
+bookings that block the owner's other pets (DEF-008, below).
 
 ### Owner cancels a booking (REQ-PO-07)
 
@@ -779,6 +784,25 @@ stays on the owner's list but leaves the sitter's request queue and both
 parties' chat lists. If its chat is open, the owner's Chat tab is closed. Both
 dashboards' **Send** re-checks that the booking is still Accepted, so a chat
 left open after a cancellation cannot keep receiving messages.
+
+### Owner deletes a pet (DEF-008)
+
+**My Pets → Delete selected pet** calls `BookingService.DeletePet`. It checks
+the pet belongs to this owner, cancels the pet's **pending and accepted**
+bookings, then deletes the pet. The confirmation says how many bookings will be
+cancelled (`BookingService.LiveBookingsForPet`), and the status line says how
+many were. Finished (declined or cancelled) bookings are left as they are.
+
+Why the bookings are cancelled first: the `Bookings.PetId` foreign key is
+`ON DELETE SET NULL`, and an empty pet means "All my pets" to REQ-PO-08. Before
+this fix (DEF-008), a deleted pet's pending booking stayed live with no pet, so it
+blocked every one of the owner's other pets over those dates. Each cancellation is
+conditional (`TryUpdateStatus`), like the Cancel button, so a booking the sitter
+declined in the meantime is skipped rather than overwritten.
+
+Not repaired: bookings whose pet was deleted **before** this fix already have an
+empty pet and can't be told apart from genuine "All my pets" bookings. The owner
+can still cancel them under My Bookings.
 
 ### Sitter responds; both parties chat (FR-S4 / FR-S5 / FR-O5)
 

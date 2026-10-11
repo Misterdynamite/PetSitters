@@ -42,7 +42,7 @@ flowchart LR
 | 0 | **No secrets committed** | CI | A `.env*` or `*.env` file other than `.env.example` is tracked in git (so copies and backups such as `.env - Copy` or `prod.env` count too), **or** any tracked file contains a `mysql://user:password@host` URL whose host isn't a placeholder (`HOST`, `host`, `h`, `localhost`, `127.0.0.1`, `*.example.com`, `*.test`). `.env` holds the database password and the repository is public. The failure lists only `file:line`, never the matched text, because CI logs are public too. |
 | 1 | **Successful build** | CI + local | The WPF app doesn't compile (Release in CI). |
 | 2 | **Smoke tests**: 12 tests tagged `Smoke` | CI + local build | Any core path is broken: password hashing, reading `.env` and `DATABASE_URL`, choosing the database at launch (cloud when reachable, local fallback when not), register, log in (< 1 s, on SQLite), schema/migration start-up, booking request, accept, chat persistence. |
-| 3 | **Full logic + integration suite**: 288 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 121 MySQL parity cases are excluded (see below). |
+| 3 | **Full logic + integration suite**: 292 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 125 MySQL parity cases are excluded (see below). |
 | 4 | **UI regression suite**: 8 FlaUI tests | Local, before merge | An end-to-end journey breaks (see below for why it isn't in CI). |
 
 Gates run in order and **stop at the first failure**. Smoke runs before the
@@ -149,11 +149,11 @@ the same behaviour on MySQL. It defines 9 test classes tagged
 `PetRepositoryTests_MySql`, `SitterProfileRepositoryTests_MySql`,
 `SharedEmailTests_MySql`). Each inherits **every** test of the matching SQLite
 class and swaps only the database (`DatabaseTestBase.CreateDatabase()`), giving
-**121 executed cases**. They catch SQL only one engine accepts (the
+**125 executed cases**. They catch SQL only one engine accepts (the
 engine-specific SQL lives in `Data/SqlDialect.cs`), values MySQL's strict mode
 rejects, and collation or ordering differences.
 
-**They are strictly opt-in.** Without one of the variables below, all 121 are
+**They are strictly opt-in.** Without one of the variables below, all 125 are
 reported **Skipped** (Inconclusive), never failed. The opt-in lives in the test
 code rather than in a filter because Visual Studio's *Run All Tests* ignores
 command-line filters.
@@ -184,8 +184,9 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
   command timeout reading from the socket) while the other 118 passed. **Read a
   timeout failure as "re-run", and an assertion failure as a real difference
   between the engines.**
-- **Last result (2026-10-09, after the UI wording changes): 121/121 passed**
-  against the real cloud MySQL server in 4 m 18 s. Before that, 2026-10-07 after
+- **Last result (2026-10-12, after the DEF-008 fix added 4 cases): 125/125 passed**
+  against the real cloud MySQL server in 4 m 35 s. Earlier: 2026-10-09, after the
+  UI wording changes, 121/121 in 4 m 18 s; 2026-10-07 after
   the review fixes: 121/121 in 4 m 15 s (the rerun after the 118/121 run above),
   after which the server held no `sitters4us_test_*` databases.
 
@@ -233,7 +234,7 @@ local database.
 |------|---------|
 | Build + smoke + full suite (local gate) | `MSBuild.exe PetSitters.csproj /t:Restore,Build /p:Configuration=Debug` |
 | Build only | add `/p:SkipTests=true` |
-| Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 121 MySQL cases are listed as Skipped unless opted in) |
+| Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 125 MySQL cases are listed as Skipped unless opted in) |
 | MySQL parity suite (opt-in) | set `PETSITTERS_TEST_MYSQL=1` or `PETSITTERS_TEST_MYSQL_URL`, then `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql` (about 4–7 min) |
 | UI regression suite | `dotnet test PetSitters.UiTests -c Debug` (interactive desktop; don't touch the mouse) |
 | CI | Automatic on push or PR to `main`; manual via **Actions → CI → Run workflow** |

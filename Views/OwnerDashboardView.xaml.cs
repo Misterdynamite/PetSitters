@@ -230,11 +230,28 @@ namespace PetSitters.Views
         {
             if (PetsList.SelectedItem is Pet pet)
             {
-                var confirm = MessageBox.Show($"Are you sure you want to delete '{pet.Name}'? This cannot be undone.",
+                // Deleting a pet also cancels its pending and accepted bookings
+                // (DEF-008), so say so before asking.
+                int live = _services.BookingActions.LiveBookingsForPet(pet.Id, Me.Id).Count;
+                string warning = live == 0 ? ""
+                    : live == 1 ? $"\n\n{pet.Name} has 1 active booking, which will be cancelled."
+                    : $"\n\n{pet.Name} has {live} active bookings, which will be cancelled.";
+                var confirm = MessageBox.Show($"Are you sure you want to delete '{pet.Name}'? This cannot be undone." + warning,
                     "Delete pet", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (confirm != MessageBoxResult.Yes) return;
 
-                // Attempt to remove the pet image file from disk if present. Safe with
+                PetDeletionResult result = _services.BookingActions.DeletePet(pet.Id, Me.Id);
+                if (!result.Success)
+                {
+                    // Deleted from another computer in the meantime: refresh the list.
+                    LoadPets();
+                    RefreshBookingPetCombo();
+                    PetStatus.Foreground = (System.Windows.Media.Brush)FindResource("Danger");
+                    PetStatus.Text = result.ErrorMessage;
+                    return;
+                }
+
+                // Remove the pet image file only once the pet is really gone. Safe with
                 // the shared database because pet.ImagePath is only ever a file inside
                 // this PC's own image folder: anything else reads back as null
                 // (LocalImages.TrustedPathOrNull), so a planted path can't delete other files.
@@ -247,11 +264,14 @@ namespace PetSitters.Views
                 }
                 catch { }
 
-                _services.Pets.Delete(pet.Id);
                 LoadPets();
                 RefreshBookingPetCombo();
+                if (result.CancelledBookings > 0)
+                    LoadBookings();   // the cancelled bookings now show as Cancelled (and leave Chats)
                 PetStatus.Foreground = (System.Windows.Media.Brush)FindResource("Brand");
-                PetStatus.Text = "Pet deleted.";
+                PetStatus.Text = result.CancelledBookings == 0 ? "Pet deleted."
+                    : result.CancelledBookings == 1 ? "Pet deleted. 1 booking was cancelled."
+                    : $"Pet deleted. {result.CancelledBookings} bookings were cancelled.";
             }
             else
             {

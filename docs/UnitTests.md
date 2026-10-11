@@ -10,12 +10,12 @@ requirements traceability matrix, and how to run everything.
   database configuration: `AppConfig`/`EnvFile` and `DatabaseSelector`), the
   domain `Models`, the `Data` repositories, and `MySqlUrl` (turning
   `DATABASE_URL` into a connection string).
-- **Result:** **148 test methods → 288 executed cases on SQLite** (the
+- **Result:** **151 test methods → 292 executed cases on SQLite** (the
   difference is `[DataRow]` data-driven expansion). All passing (last run
   2026-10-09).
-- **Plus, opt-in:** **121 MySQL parity cases** that re-run the database tests
-  against a real MySQL server. All 121 passing against the real server on
-  2026-10-09 (and on 2026-10-07, on a rerun: the run before it lost 3 cases to
+- **Plus, opt-in:** **125 MySQL parity cases** that re-run the database tests
+  against a real MySQL server. All 125 passing against the real server on
+  2026-10-12 (and on 2026-10-07, on a rerun: the run before it lost 3 cases to
   network timeouts; see [CI.md](CI.md#mysql-parity-tests-opt-in)). They are skipped unless you ask
   for them (see
   [MySQL parity](#mysql-parity-opt-in)).
@@ -174,7 +174,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `Initialize_OnPreGr06Database_KeepsAllDataAndAllowsSecondRole` | An old `UNIQUE(Email)` database is rebuilt to `UNIQUE (Email, Role)` keeping users, ids, pets, bookings and links, and then accepts a second role. Mutation-checked: it fails if the rebuild leaves foreign keys on. |
 | `Initialize_RunTwice_IsIdempotent` | Startup migration is a no-op the second time. |
 
-#### `BookingServiceTests` — 26 methods / 35 cases · REQ-GR-08, REQ-PS-03, REQ-PO-08, REQ-PO-07
+#### `BookingServiceTests` — 29 methods / 39 cases · REQ-GR-08, REQ-PS-03, REQ-PO-08, REQ-PO-07, DEF-008
 | Test | What it verifies |
 |------|------------------|
 | `AcceptRequest_WithNoClash_AcceptsAndPersists` | A non-clashing request is accepted and persisted. |
@@ -203,6 +203,9 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `DeclineRequest_ForAnotherSittersBooking_IsRefused` | Authorisation: only the booking's sitter can decline. |
 | `CancelAsSitter_OnlyFromAccepted` `[DataRow ×3]` | The sitter's cancel (My Chats) works only on an accepted booking. |
 | `CancelAsSitter_ByAnotherSitter_IsRefused` | Authorisation: only the booking's sitter can cancel it. |
+| `DeletePet_WithALiveBooking_CancelsIt_AndFreesTheDates` `[DataRow ×2]` | DEF-008 regression: deleting a pet cancels its pending or accepted booking, deletes the pet, and the owner's other pet can then be booked over those dates. Before the fix the booking stayed live with no pet ("All my pets") and blocked them. Mutation-checked on 2026-10-12: with the cancellation removed, both rows fail. |
+| `DeletePet_LeavesFinishedAndOtherBookingsAlone` | Only the deleted pet's live bookings are cancelled: its declined booking, another pet's booking and an "All my pets" booking keep their status. |
+| `DeletePet_NotYourPet_IsRefused_AndNothingChanges` | Authorisation: another owner can't delete the pet (or cancel its bookings that way). |
 
 #### `AuthServiceTests` — 13 methods / 19 cases · FR-A1, FR-A2
 | Test | What it verifies |
@@ -351,8 +354,8 @@ the password never appears.
 
 ### MySQL parity (opt-in)
 
-**9 classes / 121 cases · REQ-GR-09 · all passing against the real server on
-2026-10-09 (4 m 18 s).** Network stalls show up as timeout failures, not wrong
+**9 classes / 125 cases · REQ-GR-09 · all passing against the real server on
+2026-10-12 (4 m 35 s).** Network stalls show up as timeout failures, not wrong
 answers; the run history is in [CI.md](CI.md#mysql-parity-tests-opt-in).
 
 `MySqlParityTests.cs` defines nine `[TestClass, TestCategory("MySql")]`
@@ -367,14 +370,14 @@ REQ-GR-08 / REQ-PO-08 booking rules.
 |--------------|-----------------------|------:|
 | `AuthServiceTests_MySql` | `AuthServiceTests` | 19 |
 | `BookingRepositoryTests_MySql` | `BookingRepositoryTests` | 17 |
-| `BookingServiceTests_MySql` | `BookingServiceTests` | 35 |
+| `BookingServiceTests_MySql` | `BookingServiceTests` | 39 |
 | `BookingValidationTests_MySql` | `BookingValidationTests` | 17 |
 | `ChatPersistenceTests_MySql` | `ChatPersistenceTests` | 4 |
 | `UserRepositoryTests_MySql` | `UserRepositoryTests` | 6 |
 | `PetRepositoryTests_MySql` | `PetRepositoryTests` | 7 |
 | `SitterProfileRepositoryTests_MySql` | `SitterProfileRepositoryTests` | 3 |
 | `SharedEmailTests_MySql` | `SharedEmailTests` | 13 |
-| **Total** | | **121** |
+| **Total** | | **125** |
 
 Not mirrored: `DatabaseMigrationTests` (the migrations it guards are SQLite-only)
 and the pure unit tests (no database). `SharedEmailTests`' duplicate-insert test
@@ -397,7 +400,7 @@ internet, so it only runs when one of these is set:
 | `PETSITTERS_TEST_MYSQL=1` | Reuse the server from the app's `DATABASE_URL` (environment variable, or the repo-root `.env`). |
 
 The account needs permission to create and drop databases, so a least-privilege
-app account can't run it. Without either variable, the 121 cases are reported
+app account can't run it. Without either variable, the 125 cases are reported
 **Skipped** (Inconclusive), never failed: that is what happens in Visual
 Studio's Run All Tests. The build gate and CI go further and filter the
 category out (`TestCategory!=MySql`), so they never contact a MySQL server.
@@ -427,9 +430,9 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | REQ-GR-08 | Sitter cannot accept overlapping bookings (FR-07) | `BookingOverlapTests`; `AcceptRequest_Overlap*`, `AcceptRequest_BackToBack*` (BookingServiceTests); UI: `OverlappingRequests_*` | ✅ Passing |
 | REQ-GR-04 | Booking dates/duration/pet validated with specific messages | `BookingValidationTests`; UI: `BookingForm_*` | ✅ Passing |
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
-| REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
+| REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*`, `DeletePet_*` (DEF-008) (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
-| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (121 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-09) |
+| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (125 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-12) |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
@@ -456,7 +459,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | **Security** | Salted PBKDF2 hashing, no plaintext storage, no user enumeration, per-booking chat isolation; the database password never appears in an error message or the offline notice's tooltip, and an unspecified ssl-mode still requires TLS. |
 | **Functional correctness** | Registration/login rules, booking visibility, cost calculations. |
 | **Reliability** | Bookings and messages persist and read back intact; status changes are durable; the app still opens (on the local database) when the cloud database is unreachable or misconfigured. |
-| **Portability (database engines)** | The same 121 data-layer cases pass on SQLite and on MySQL (opt-in parity run). |
+| **Portability (database engines)** | The same 125 data-layer cases pass on SQLite and on MySQL (opt-in parity run). |
 | **Data quality** | Email/password/rate/age validation via boundary and equivalence tests. |
 | **Maintainability / testability** | Logic is UI-independent and tested directly; isolated temp databases keep tests deterministic; the cloud database is injected into `DatabaseSelector`, so fallback is tested without a network. |
 
@@ -504,22 +507,22 @@ rows are labelled with each kind they contain.
 | Label | Methods | Executed cases |
 |-------|--------:|---------------:|
 | Unit | 50 | 163 |
-| Integration | 98 | 125 |
+| Integration | 101 | 129 |
 | System | 8 | 8 |
 | Acceptance | 6 | 6 |
 | Regression | 10 | 10 |
-| Security | 29 | 54 |
+| Security | 30 | 55 |
 | Performance | 4 | 4 |
 | Usability | 2 | 2 |
 | Smoke | 12 | 12 |
 | Accessibility | 0 | 0 |
-| Positive | 96 | 197 |
-| Negative | 47 | 89 |
+| Positive | 98 | 200 |
+| Negative | 48 | 90 |
 | Boundary | 30 | 110 |
 | InvalidInput | 30 | 107 |
 | ErrorHandling | 19 | 29 |
 
-(Totals across labels exceed the 288 logic + 8 UI cases because tests carry several labels. The 121 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
+(Totals across labels exceed the 292 logic + 8 UI cases because tests carry several labels. The 125 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
 
 **Known gaps (stated, not hidden):**
 - **Accessibility: none.** REQ-NFR-04 isn't implemented or assessed yet; the
@@ -535,8 +538,7 @@ rows are labelled with each kind they contain.
   (`Database.ConnectionsOpened`).
 - **MySQL parity is not in the build gate or CI.** It is opt-in, so a
   MySQL-only regression is caught only when someone runs it (last run
-  2026-10-09, 121/121 passing, after the wording changes that altered two
-  inherited `BookingServiceTests` message assertions). It also depends on the
+  2026-10-12, 125/125 passing, including the DEF-008 cases). It also depends on the
   network: two runs on 2026-10-07 lost cases to connection timeouts and passed
   when re-run.
 - **The real cloud path at launch is not automated.** `DatabaseSelectorTests`
@@ -628,6 +630,9 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `BookingServiceTests` | `DeclineRequest_ForAnotherSittersBooking_IsRefused` | 1 | Integration, Security | Negative |
 | `BookingServiceTests` | `CancelAsSitter_OnlyFromAccepted` | 3 | Integration | Positive, Negative |
 | `BookingServiceTests` | `CancelAsSitter_ByAnotherSitter_IsRefused` | 1 | Integration, Security | Negative |
+| `BookingServiceTests` | `DeletePet_WithALiveBooking_CancelsIt_AndFreesTheDates` | 2 | Integration | Positive |
+| `BookingServiceTests` | `DeletePet_LeavesFinishedAndOtherBookingsAlone` | 1 | Integration | Positive |
+| `BookingServiceTests` | `DeletePet_NotYourPet_IsRefused_AndNothingChanges` | 1 | Integration, Security | Negative |
 | `BookingValidationTests` | `Validate_StartDate_RelativeToToday` | 3 | Integration | Positive, Boundary, InvalidInput |
 | `BookingValidationTests` | `Validate_EndNotAfterStart_IsRejected` | 2 | Integration | Boundary, InvalidInput |
 | `BookingValidationTests` | `Validate_MinimumDuration_Boundary` | 3 | Integration | Positive, Boundary, InvalidInput |

@@ -10,8 +10,9 @@ namespace PetSitters.Tests
     /// SQLite database. Covers REQ-GR-08 (a sitter cannot accept a booking
     /// overlapping one they have already accepted; the rejected request stays
     /// pending), the REQ-PS-03 guards on who may accept what, REQ-PO-08 (an
-    /// owner cannot book the same pet twice over overlapping dates) and
-    /// REQ-PO-07 / DEF-003 (the owner cancels from pending or accepted).
+    /// owner cannot book the same pet twice over overlapping dates),
+    /// REQ-PO-07 / DEF-003 (the owner cancels from pending or accepted) and
+    /// DEF-008 (deleting a pet cancels its live bookings).
     /// </summary>
     [TestClass]
     public class BookingServiceTests : DatabaseTestBase
@@ -446,6 +447,73 @@ namespace PetSitters.Tests
 
             Assert.IsFalse(Services.BookingActions.CancelAsSitter(booking.Id, RegisterOtherSitter()).Success);
             Assert.AreEqual(BookingStatus.Accepted, Services.Bookings.GetById(booking.Id).Status);
+        }
+
+        // ---- DEF-008: deleting a pet cancels its live bookings ----
+
+        [DataTestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        [DataRow(BookingStatus.Pending)]
+        [DataRow(BookingStatus.Accepted)]
+        // DEF-008 regression (REQ-PO-08): a deleted pet's live booking used to stay
+        // live with no pet, which the same-pet rule reads as "All my pets", so it
+        // blocked every other pet of the owner over those dates.
+        public void DeletePet_WithALiveBooking_CancelsIt_AndFreesTheDates(BookingStatus stage)
+        {
+            int rex = AddPet(_ownerId, "Rex");
+            int buddy = AddPet(_ownerId, "Buddy");
+            Booking rexBooking = Request(_ownerId, 10, 13, petId: rex);
+            Services.Bookings.UpdateStatus(rexBooking.Id, stage);
+
+            PetDeletionResult result = Services.BookingActions.DeletePet(rex, _ownerId);
+
+            Assert.IsTrue(result.Success, result.ErrorMessage);
+            Assert.AreEqual(1, result.CancelledBookings);
+            Assert.AreEqual(BookingStatus.Cancelled, Services.Bookings.GetById(rexBooking.Id).Status);
+            Assert.IsFalse(Services.Pets.GetByOwner(_ownerId).Exists(p => p.Id == rex), "The pet itself must be deleted.");
+            BookingResult buddyRequest = Services.BookingActions.RequestBooking(NewRequest(_ownerId, buddy, 11, 12));
+            Assert.IsTrue(buddyRequest.Success, "Another pet must be bookable over those dates: " + buddyRequest.ErrorMessage);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Positive")]
+        // Only the deleted pet's LIVE bookings are cancelled: its finished ones keep
+        // their status, and other pets' and "All my pets" bookings are untouched.
+        public void DeletePet_LeavesFinishedAndOtherBookingsAlone()
+        {
+            int rex = AddPet(_ownerId, "Rex");
+            int buddy = AddPet(_ownerId, "Buddy");
+            Booking rexDeclined = Request(_ownerId, 1, 3, petId: rex);
+            Services.Bookings.UpdateStatus(rexDeclined.Id, BookingStatus.Declined);
+            Booking buddyPending = Request(_ownerId, 10, 13, petId: buddy);
+            Booking allPetsPending = Request(_ownerId, 20, 22, petId: null);
+
+            PetDeletionResult result = Services.BookingActions.DeletePet(rex, _ownerId);
+
+            Assert.IsTrue(result.Success, result.ErrorMessage);
+            Assert.AreEqual(0, result.CancelledBookings);
+            Assert.AreEqual(BookingStatus.Declined, Services.Bookings.GetById(rexDeclined.Id).Status);
+            Assert.AreEqual(BookingStatus.Pending, Services.Bookings.GetById(buddyPending.Id).Status);
+            Assert.AreEqual(BookingStatus.Pending, Services.Bookings.GetById(allPetsPending.Id).Status);
+        }
+
+        [TestMethod]
+        [TestCategory("Integration")]
+        [TestCategory("Security")]
+        [TestCategory("Negative")]
+        // Authorisation: another owner can't delete the pet, or cancel its bookings that way.
+        public void DeletePet_NotYourPet_IsRefused_AndNothingChanges()
+        {
+            int rex = AddPet(_ownerId, "Rex");
+            Booking booking = Request(_ownerId, 10, 13, petId: rex);
+
+            PetDeletionResult result = Services.BookingActions.DeletePet(rex, _otherOwnerId);
+
+            Assert.IsFalse(result.Success);
+            Assert.AreEqual(BookingStatus.Pending, Services.Bookings.GetById(booking.Id).Status);
+            Assert.IsTrue(Services.Pets.GetByOwner(_ownerId).Exists(p => p.Id == rex), "The pet must not be deleted.");
         }
 
         // ---- helpers ----

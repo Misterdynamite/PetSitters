@@ -19,7 +19,7 @@ database when one is configured and reachable at launch, and falls back to a loc
 | Project | Kind | Framework | Purpose |
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
-| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (288 cases on SQLite, plus 121 opt-in MySQL parity cases) |
+| `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (292 cases on SQLite, plus 125 opt-in MySQL parity cases) |
 | `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (8 tests) |
 
 ## Build, test, run — IMPORTANT tooling notes
@@ -71,7 +71,7 @@ Build + run the logic tests (build the app first — see below):
 dotnet test PetSitters.Tests -c Debug
 ```
 
-MySQL parity tests are **opt-in** (otherwise all 121 report Skipped/Inconclusive).
+MySQL parity tests are **opt-in** (otherwise all 125 report Skipped/Inconclusive).
 Set `PETSITTERS_TEST_MYSQL_URL` to a `mysql://` URL for a server where databases
 can be created, or `PETSITTERS_TEST_MYSQL=1` to reuse the server from
 `DATABASE_URL`/`.env` (that user must be allowed to create and drop databases),
@@ -125,6 +125,7 @@ Data/       Database (provider-aware: SQLite or MySQL; schema + connection facto
 Services/   PasswordHasher (PBKDF2), ValidationHelper, AuthService (+AuthResult),
             BookingService (+BookingResult): request (REQ-GR-04 validation, REQ-PO-08 same-pet overlap),
             accept (REQ-GR-08 sitter overlap), cancel (REQ-PO-07),
+            delete pet (+PetDeletionResult; cancels its live bookings first, DEF-008),
             AppConfig (+EnvFile): env vars override .env next to the exe,
             DatabaseSelector (+DatabaseSelection): cloud-or-local decision at launch,
             AppServices (composition root; holds repos + CurrentUser)
@@ -271,6 +272,9 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   offset-free; legacy rows with an offset are read as their clock value. Edit a
   `User.Clone()` and copy it back only after the save succeeds. `UpdateDetails`
   writes name/phone/location only; the picture goes through `UpdateProfileImage`.
+  Delete a pet ONLY through `BookingService.DeletePet` (never `Pets.Delete` from a
+  view): it cancels the pet's live bookings first, because `Bookings.PetId` is
+  `ON DELETE SET NULL` and an empty pet means "All my pets" to REQ-PO-08 (DEF-008).
 - **Cloud latency:** ~195 ms per query, so screens must load each list with ONE
   query: `BookingRepository.GetDetailsForOwner/GetDetailsForSitter`,
   `UserRepository.GetSittersWithProfiles`, `ChatRepository.GetForBookingWithSenderNames`

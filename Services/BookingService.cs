@@ -258,6 +258,67 @@ namespace PetSitters.Services
             booking.Status = BookingStatus.Cancelled;
             return BookingResult.Ok(booking);
         }
+
+        /// <summary>
+        /// The owner's pending and accepted bookings for one pet: the ones
+        /// <see cref="DeletePet"/> would cancel. Used to warn before deleting.
+        /// </summary>
+        public List<Booking> LiveBookingsForPet(int petId, int ownerUserId)
+        {
+            return _bookings.GetForOwner(ownerUserId)
+                .Where(b => b.PetId == petId && b.IsActive)
+                .ToList();
+        }
+
+        /// <summary>
+        /// An owner deletes one of their pets, cancelling its pending and
+        /// accepted bookings first (DEF-008). Deleting a pet empties the pet on
+        /// its bookings (the foreign key is ON DELETE SET NULL), and an empty pet
+        /// means "All my pets" to the same-pet rule (REQ-PO-08). So a deleted
+        /// pet's live booking used to block every one of the owner's other pets
+        /// over those dates. Finished (declined or cancelled) bookings are left
+        /// as they are; they block nothing.
+        /// </summary>
+        public PetDeletionResult DeletePet(int petId, int ownerUserId)
+        {
+            // Only the pet's own owner may delete it (and so cancel its bookings).
+            if (!_pets.GetByOwner(ownerUserId).Any(p => p.Id == petId))
+                return PetDeletionResult.Fail("That pet could not be found.");
+
+            // Cancel BEFORE deleting: once the pet is gone its bookings can't be
+            // told apart from genuine "All my pets" bookings. Each cancel is
+            // conditional, like the Cancel button: one the sitter declined in the
+            // meantime is already finished, so it is skipped, not overwritten.
+            int cancelled = 0;
+            foreach (Booking booking in LiveBookingsForPet(petId, ownerUserId))
+            {
+                if (_bookings.TryUpdateStatus(booking.Id, BookingStatus.Cancelled, BookingStatus.Pending, BookingStatus.Accepted))
+                    cancelled++;
+            }
+
+            _pets.Delete(petId);
+            return PetDeletionResult.Ok(cancelled);
+        }
+    }
+
+    /// <summary>Outcome of <see cref="BookingService.DeletePet"/>.</summary>
+    public class PetDeletionResult
+    {
+        public bool Success { get; private set; }
+        public string ErrorMessage { get; private set; }
+
+        /// <summary>How many of the pet's pending or accepted bookings were cancelled.</summary>
+        public int CancelledBookings { get; private set; }
+
+        public static PetDeletionResult Ok(int cancelledBookings)
+        {
+            return new PetDeletionResult { Success = true, CancelledBookings = cancelledBookings };
+        }
+
+        public static PetDeletionResult Fail(string message)
+        {
+            return new PetDeletionResult { Success = false, ErrorMessage = message };
+        }
     }
 
     /// <summary>Outcome of a booking action such as <see cref="BookingService.AcceptRequest"/>.</summary>
