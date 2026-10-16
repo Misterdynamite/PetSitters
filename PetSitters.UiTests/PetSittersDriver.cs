@@ -229,6 +229,22 @@ namespace PetSitters.UiTests
             Pause();
         }
 
+        /// <summary>
+        /// Selects the first row of a list/list-view (by <c>x:Name</c>) that shows
+        /// the given text in one of its cells, e.g. the booking whose Status
+        /// column reads "Accepted" when the row order isn't guaranteed.
+        /// </summary>
+        public void SelectListItemContaining(string automationId, string text)
+        {
+            ListBox list = ByName(automationId).AsListBox();
+            ListBoxItem match = Retry.WhileNull(
+                () => Array.Find(list.Items, item => item.FindFirstDescendant(cf => cf.ByName(text)) != null),
+                Timeout).Result
+                ?? throw new InvalidOperationException("No row showing '" + text + "' in list '" + automationId + "'.");
+            match.Select();
+            Pause();
+        }
+
         // ---- clicking --------------------------------------------------------
 
         /// <summary>Clicks a button identified by its visible text (e.g. "Create account").</summary>
@@ -261,6 +277,20 @@ namespace PetSitters.UiTests
 
             tab.SelectTabItem(header);
             Pause();
+        }
+
+        /// <summary>
+        /// True if the current view has a visible tab with this header, checked
+        /// once (no wait), like <see cref="IsShown"/>. The booking Chat tab is
+        /// collapsed rather than removed when a chat closes, and a collapsed tab
+        /// is either missing from UI Automation or reported off-screen, so both
+        /// count as "not shown".
+        /// </summary>
+        public bool IsTabShown(string header)
+        {
+            AutomationElement item = _window.FindFirstDescendant(cf =>
+                cf.ByControlType(ControlType.TabItem).And(cf.ByName(header)));
+            return item != null && !item.IsOffscreen;
         }
 
         // ---- reading ---------------------------------------------------------

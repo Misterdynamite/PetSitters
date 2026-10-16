@@ -423,7 +423,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | FR-O2 | Owner registers personal details (incl. location) | `Insert_AssignsId_*`, `UpdateDetails_PersistsEditedFields` | ✅ Passing |
 | FR-O3 | Owner registers pet details | `PetRepositoryTests`; `TryParseNonNegativeInt_*` (pet age) | ✅ Passing |
 | FR-O4 | Owner requests a booking | `BookingRepositoryTests` (insert/visibility/rate); `BookingCalculationTests` | ✅ Passing |
-| FR-O5 | Owner chats with sitter once accepted | `ChatPersistenceTests` (persistence + isolation, both directions); UI: `BookingJourney_*` checks the owner's Chats list | ✅ Passing. The owner-side Chats tab is implemented; no UI test sends a message from the owner side yet |
+| FR-O5 (REQ-PO-05) | Owner chats with sitter once accepted; no chat while pending, declined or cancelled | `ChatPersistenceTests` (persistence + isolation, both directions); UI: `BookingChat_*` (no chat while pending, declined or cancelled; the owner reads the sitter's message and replies; cancelling closes an open chat), `BookingJourney_*` | ✅ Passing |
 | FR-S1 | Sitter registers personal details (incl. location) | `UserRepositoryTests` (shared user table) | ✅ Passing |
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
 | FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
@@ -433,7 +433,7 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*`, `DeletePet_*` (DEF-008) (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
 | REQ-GR-09 | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (125 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-12) |
-| FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
+| FR-S5 (REQ-PS-04) | Sitter chats with owner once accepted; no chat while pending, declined or cancelled | `ChatPersistenceTests`; UI: `BookingChat_*` (no chat while pending, declined or cancelled), `BookingJourney_*` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
 > and is exercised by the `PetSitters.UiTests` end-to-end journey rather than by
@@ -508,21 +508,21 @@ rows are labelled with each kind they contain.
 |-------|--------:|---------------:|
 | Unit | 50 | 163 |
 | Integration | 101 | 129 |
-| System | 9 | 9 |
-| Acceptance | 6 | 6 |
-| Regression | 11 | 11 |
+| System | 10 | 10 |
+| Acceptance | 7 | 7 |
+| Regression | 12 | 12 |
 | Security | 30 | 55 |
 | Performance | 4 | 4 |
 | Usability | 3 | 3 |
 | Smoke | 12 | 12 |
 | Accessibility | 0 | 0 |
-| Positive | 98 | 200 |
-| Negative | 48 | 90 |
+| Positive | 99 | 201 |
+| Negative | 49 | 91 |
 | Boundary | 31 | 111 |
 | InvalidInput | 30 | 107 |
 | ErrorHandling | 19 | 29 |
 
-(Totals across labels exceed the 292 logic + 9 UI cases because tests carry several labels. The 125 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
+(Totals across labels exceed the 292 logic + 10 UI cases because tests carry several labels. The 125 inherited MySQL parity cases are not counted here: they repeat these tests' labels.)
 
 **Known gaps (stated, not hidden):**
 - **Accessibility: none.** REQ-NFR-04 isn't implemented or assessed yet; the
@@ -731,6 +731,7 @@ Cases = executed cases (`[DataRow]` count, or 1). The UI suite's extra `EndToEnd
 | `UiRegressionTests` | `BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen` | 1 | System, Acceptance, Regression | Positive |
 | `UiRegressionTests` | `OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending` | 1 | System, Acceptance, Regression | Negative |
 | `UiRegressionTests` | `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | 1 | System, Acceptance, Regression | Positive, Negative |
+| `UiRegressionTests` | `BookingChat_OnlyAvailableWhileAccepted_NotWhenPendingDeclinedOrCancelled` | 1 | System, Acceptance, Regression | Positive, Negative |
 | `UiRegressionTests` | `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | 1 | System, Acceptance, Usability, Regression | Positive, Negative |
 | `UiRegressionTests` | `BookingForm_InvalidRequests_AreRejectedWithSpecificMessages` | 1 | System, Acceptance, Usability, Regression | Positive, Boundary, InvalidInput |
 | `UiRegressionTests` | `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | 1 | System, Acceptance, Regression | ErrorHandling, Negative |

@@ -43,7 +43,7 @@ flowchart LR
 | 1 | **Successful build** | CI + local | The WPF app doesn't compile (Release in CI). |
 | 2 | **Smoke tests**: 12 tests tagged `Smoke` | CI + local build | Any core path is broken: password hashing, reading `.env` and `DATABASE_URL`, choosing the database at launch (cloud when reachable, local fallback when not), register, log in (< 3 s, on SQLite), schema/migration start-up, booking request, accept, chat persistence. |
 | 3 | **Full logic + integration suite**: 292 cases | CI + local build | Any unit or integration test fails. Runs on SQLite; the 125 MySQL parity cases are excluded (see below). |
-| 4 | **UI regression suite**: 9 FlaUI tests | Local, before merge | An end-to-end journey breaks (see below for why it isn't in CI). |
+| 4 | **UI regression suite**: 10 FlaUI tests | Local, before merge | An end-to-end journey breaks (see below for why it isn't in CI). |
 
 Gates run in order and **stop at the first failure**. Smoke runs before the
 full suite deliberately: in the 2026-10-07 run it took about 6.5 s against
@@ -198,9 +198,9 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
 The FlaUI suite drives the **real desktop**: it moves the mouse, types and
 reads the screen. Hosted CI runners have no reliable interactive desktop.
 It also fails if anyone uses the mouse mid-run. Running it in CI would make the
-pipeline red for reasons unrelated to the change being tested. All 9 tests passed
-at the default window size on 2026-10-12, after the login form was made
-scrollable (DEF-005). Before that, from the login redesign until 2026-10-09, the
+pipeline red for reasons unrelated to the change being tested. All 10 tests passed
+at the default window size on 2026-10-16. That has held since 2026-10-12, when
+the login form was made scrollable (DEF-005). Before that, from the login redesign until 2026-10-09, the
 login form was clipped at the default 920×640 window and the suite only passed
 with the window maximised.
 

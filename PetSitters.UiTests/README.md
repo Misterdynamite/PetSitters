@@ -22,6 +22,7 @@ automated coverage.
 | `BookingJourney_OwnerBooksSitterAndSitterAccepts_CompletesWithChatOpen` | The full two-role workflow (below) |
 | `OverlappingRequests_SitterAcceptsOne_SecondIsRefusedAndStaysPending` | REQ-GR-08: after accepting one of two same-date requests, accepting the other is refused with a "stay pending" message and it remains in the list |
 | `SamePetDoubleBooking_IsRefused_UntilOwnerCancelsTheFirst` | REQ-PO-08 + REQ-PO-07: booking the same pet twice is refused; cancelling the pending booking (with confirmation) frees the pet to rebook, and the cancelled one leaves the sitter's queue |
+| `BookingChat_OnlyAvailableWhileAccepted_NotWhenPendingDeclinedOrCancelled` | REQ-PO-05 + REQ-PS-04: neither side has a chat while two requests are pending; a declined one never gets one; the accepted one's chat works both ways (the owner reads the sitter's message from an earlier session and replies); cancelling with the chat open closes it, and the booking leaves both sides' chat lists |
 | `SharedEmail_OwnerAlsoRegistersAsSitter_LoginAsksWhichRole` | REQ-GR-06: an owner re-registers as a sitter with the same email; a second sitter sign-up is refused with a warning; login with the shared password asks Owner/Sitter and opens the chosen dashboard |
 | `BookingForm_InvalidRequests_AreRejectedWithSpecificMessages` | REQ-GR-04: no pet, start in the past and a 15-day booking are each rejected with their own message; exactly 14 days is accepted (dates are set through UI Automation with `SetDate`) |
 | `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` | REQ-GR-09: with a cloud `DATABASE_URL` that refuses connections, the app still opens on the local database, the login screen's `OfflineNotice` says *Working offline*, and registering an account still works |
@@ -49,9 +50,9 @@ Requirements exercised: FR-A1, FR-A2, FR-O1–FR-O4, FR-S1–FR-S5, plus the REQ
 REQ-PO IDs in the table, including **REQ-GR-09** (shared cloud database with
 local fallback at launch) through the two `Startup_*` tests.
 
-Partly covered: **FR-O5** (owner-side chat) works in the app, but the suite only
-sends messages from the sitter side; the owner's *Chats* tab is checked only to
-confirm a cancelled booking leaves it.
+Not covered: the *"This chat is closed"* refusal when the **other** person
+changes a booking while a chat is open (sending re-checks the status for that
+case). It needs two app instances driven at once; the suite runs one.
 
 Not covered here, by design: a *successful* cloud (MySQL) connection. The suite is
 kept off the shared cloud database (see below); the data layer is checked against
@@ -121,8 +122,8 @@ because the app waits for the failed connection before showing the login screen
 > redesign the login card had no scrollbar, so at the default 920×640 window the
 > password box was cut off and tests failed with FlaUI's `NoClickablePointException`;
 > until 2026-10-09 the suite was run with the window maximised. The login card now
-> scrolls (`LoginScroll`), and all 9 tests pass at the default window size
-> (2026-10-12). `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` keeps it
+> scrolls (`LoginScroll`), and all 9 tests passed at the default window size
+> (2026-10-12); all 10 did on 2026-10-16, after `BookingChat_*` was added. `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` keeps it
 > that way. The fix went into the app's layout, not the driver, because real users
 > hit the same clipping.
 

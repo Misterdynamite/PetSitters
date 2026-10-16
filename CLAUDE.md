@@ -20,7 +20,7 @@ database when one is configured and reachable at launch, and falls back to a loc
 |---------|------|-----------|---------|
 | `PetSitters` | WPF app, **classic (non-SDK) csproj** | net4.7.2 | The application |
 | `PetSitters.Tests` | MSTest, **SDK-style** | net472 | Logic + integration tests (292 cases on SQLite, plus 125 opt-in MySQL parity cases) |
-| `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (9 tests) |
+| `PetSitters.UiTests` | MSTest + FlaUI, SDK-style | net472 | End-to-end UI automation (10 tests) |
 
 ## Build, test, run — IMPORTANT tooling notes
 

@@ -26,10 +26,9 @@ namespace PetSitters.UiTests
     ///   REQ-GR-06 one account per email per role; login asks which (SharedEmail_* test)
     ///   REQ-GR-09 cloud database with local fallback; offline notice on login (Startup_* tests)
     ///   REQ-GR-04 booking form validation messages (BookingForm_* test)
-    ///
-    /// Partly covered: FR-O5 (owner-side chat) works in the app, but this suite
-    /// sends messages only from the sitter side; the owner's Chats tab is checked
-    /// only to confirm a cancelled booking leaves it.
+    ///   REQ-PO-05 / REQ-PS-04 chat only while accepted: none when pending,
+    ///     declined or cancelled, for owner and sitter; the owner reads and
+    ///     replies (BookingChat_* test)
     ///
     /// Regression guards - specific breakages this suite exists to catch, each of
     /// which has bitten this project before:
@@ -70,6 +69,7 @@ namespace PetSitters.UiTests
         private const string SecondPetBreed = "Beagle";
         private const string BookingMessage = "Please look after Buddy while I'm away next weekend.";
         private const string ChatGreeting = "Thanks Olivia, Buddy is booked in!";
+        private const string OwnerReply = "Great, his lead is by the front door.";
 
         private PetSittersDriver _app;
 
@@ -258,6 +258,114 @@ namespace PetSitters.UiTests
             _app.SelectTab("Booking Requests");
             Assert.AreEqual(1, _app.CountListItems("RequestsList"),
                 "A cancelled booking should no longer appear in the sitter's booking requests.");
+        }
+
+        /// <summary>
+        /// REQ-PO-05 and REQ-PS-04 through the real GUI: a booking's chat exists
+        /// only while the booking is accepted, for both participants. The owner
+        /// sends one sitter two requests (one per pet). While they are pending
+        /// neither side has a chat; the sitter declines one, which gets no chat;
+        /// the sitter accepts the other, and both sides can use its chat (the
+        /// owner reads the sitter's message from an earlier session and
+        /// replies). When the owner cancels with that chat open, the chat closes
+        /// and the booking leaves both sides' chat lists.
+        ///
+        /// Not covered here: the "This chat is closed" refusal when the OTHER
+        /// person changes the booking while a chat is open, which needs two app
+        /// instances at once. Sending re-checks the status for that case.
+        /// </summary>
+        [TestMethod]
+        [TestCategory("System")]
+        [TestCategory("Acceptance")]
+        [TestCategory("Positive")]
+        [TestCategory("Negative")]
+        [TestCategory("Regression")]
+        [TestCategory("EndToEnd")]
+        [TestProperty("Requirements", "REQ-PO-05, REQ-PS-04, FR-O5, FR-S5")]
+        public void BookingChat_OnlyAvailableWhileAccepted_NotWhenPendingDeclinedOrCancelled()
+        {
+            RegisterSitter();
+            FillSittingProfile();
+            LogOut();
+
+            RegisterOwner();
+            AddPet();
+            AddPet(SecondPetName, SecondPetBreed);
+            BookTheSitter();
+            SendRequestForSameDates(SecondPetName);
+
+            Step("Pending: the owner has no chat for either request (REQ-PO-05)");
+            _app.SelectTab("Chats");
+            Assert.AreEqual(0, _app.CountListItems("ChatsList"),
+                "A pending booking should have no chat on the owner's side.");
+            LogOut();
+
+            LogInAsSitter();
+            Step("Pending: the sitter has no chat for either request (REQ-PS-04)");
+            _app.SelectTab("My Chats");
+            Assert.AreEqual(0, _app.CountListItems("ChatsList"),
+                "A pending booking should have no chat on the sitter's side.");
+
+            Step("Sitter declines one request: a declined booking gets no chat");
+            _app.SelectTab("Booking Requests");
+            _app.SelectFirstListItem("RequestsList");
+            _app.ClickButton("Decline");
+            Assert.AreEqual(1, _app.CountListItems("RequestsList"),
+                "The declined request should leave the pending list.");
+            _app.SelectTab("My Chats");
+            Assert.AreEqual(0, _app.CountListItems("ChatsList"),
+                "A declined booking should have no chat on the sitter's side.");
+
+            Step("Sitter accepts the other request: its chat opens and works");
+            _app.SelectTab("Booking Requests");
+            _app.SelectFirstListItem("RequestsList");
+            AcceptTheRequest();
+            ConfirmChatOpenedAndSendMessage();
+            _app.SelectTab("My Chats");
+            Assert.AreEqual(1, _app.CountListItems("ChatsList"),
+                "Only the accepted booking should be listed under the sitter's chats.");
+            LogOut();
+
+            LogInAsOwner();
+            Step("Owner: only the accepted booking has a chat, not the declined one (REQ-PO-05)");
+            _app.SelectTab("My Bookings");
+            Assert.IsTrue(_app.HasText("Declined"),
+                "The owner should see the declined booking in My Bookings.");
+            _app.SelectTab("Chats");
+            Assert.AreEqual(1, _app.CountListItems("ChatsList"),
+                "Only the accepted booking should be listed under the owner's chats.");
+
+            Step("Owner opens the chat: the sitter's message persisted, and the owner replies");
+            _app.SelectFirstListItem("ChatsList");
+            _app.ClickButton("Open chat");
+            Assert.IsTrue(_app.HasText(SitterName + ": " + ChatGreeting),
+                "The sitter's message from the earlier session should be in the chat.");
+            _app.EnterText("ChatInput", OwnerReply);
+            _app.ClickButton("Send");
+            Assert.IsTrue(_app.HasText(OwnerName + ": " + OwnerReply),
+                "The owner's reply should appear in the chat, attributed to the owner.");
+            // Positive control for the IsTabShown check below.
+            Assert.IsTrue(_app.IsTabShown("Chat"), "The booking's Chat tab should be showing while it is open.");
+
+            Step("Owner cancels the booking with its chat open: the chat closes");
+            _app.SelectTab("My Bookings");
+            _app.SelectListItemContaining("BookingsList", "Accepted");
+            _app.ClickButton("Cancel booking");
+            _app.ClickDialogButton(CancelConfirmTitle, "Yes");
+            StringAssert.Contains(_app.ReadText("CancelStatus"), "cancelled",
+                "Cancelling should confirm the booking was cancelled.");
+            Assert.IsFalse(_app.IsTabShown("Chat"),
+                "Cancelling a booking should close its open chat.");
+            _app.SelectTab("Chats");
+            Assert.AreEqual(0, _app.CountListItems("ChatsList"),
+                "A cancelled booking should no longer be listed under the owner's chats.");
+            LogOut();
+
+            LogInAsSitter();
+            Step("Sitter: the cancelled booking's chat is gone too (REQ-PS-04)");
+            _app.SelectTab("My Chats");
+            Assert.AreEqual(0, _app.CountListItems("ChatsList"),
+                "A cancelled booking should no longer be listed under the sitter's chats.");
         }
 
         /// <summary>
