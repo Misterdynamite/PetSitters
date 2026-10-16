@@ -234,8 +234,8 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
 - Tests use AAA structure, `Method_Scenario_ExpectedResult` names, `[DataRow]` for
   boundary/equivalence cases, and are tagged to requirement IDs (FR-O*/FR-S*/FR-A*)
   in comments. Put DB tests in classes deriving from `DatabaseTestBase`.
-  Cloud-database tests are tagged REQ-GR-09 (proposed: "Shared cloud database with
-  local fallback at launch").
+  Cloud-database tests are tagged REQ-GR-09 ("Shared cloud database with local
+  fallback at launch", a Must requirement in the final report).
 - **Every test carries `[TestCategory]` labels on two axes:** a type
   (`Unit`/`Integration`/`System`/`Acceptance`/`Regression`/`Security`/`Performance`/`Usability`)
   and a scenario (`Positive`/`Negative`/`Boundary`/`InvalidInput`/`ErrorHandling`).

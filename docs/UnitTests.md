@@ -279,7 +279,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 | `GetForBooking_ReturnsMessagesInChronologicalOrder` | Messages return oldest-first. |
 | `GetForBookingWithSenderNames_OneQuery_InOrder_WithNames` | The chat panel's loader returns messages in order WITH sender names, in one query (it used to look up each sender separately). |
 
-### Database configuration & launch-time choice (REQ-GR-09, proposed)
+### Database configuration & launch-time choice (REQ-GR-09)
 
 The app tries the shared cloud MySQL database first and falls back to the local
 SQLite file if it can't use it, decided once at launch. `DatabaseConfigurationTests`
@@ -432,15 +432,15 @@ when a requirement changes, quickly find the tests that must be reviewed.
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*`, `DeletePet_*` (DEF-008) (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
 | REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
-| REQ-GR-09 *(proposed)* | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (125 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-12) |
+| REQ-GR-09 | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (125 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-12) |
 | FR-S5 | Sitter chats with owner once accepted | `ChatPersistenceTests` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
 > and is exercised by the `PetSitters.UiTests` end-to-end journey rather than by
 > this logic suite.
 >
-> REQ-GR-09 is a **proposed** requirement ID, not yet in the report. The tests
-> are already tagged with it so the link holds once it is added. Its UI evidence
+> REQ-GR-09 is a Must requirement in the final report. It was a proposed ID
+> until 2026-10-16, and the tests were tagged with it in advance. Its UI evidence
 > is `Startup_CloudDatabaseUnreachable_FallsBackToLocalAndSaysSo` (an
 > unreachable cloud URL opens on the local database, the login screen shows the
 > "Working offline" notice, and registration still works) and
@@ -484,7 +484,7 @@ MySQL parity subclasses inherit their base class's labels and add `MySql`.
 | `Acceptance` | System tests that walk a requirement's acceptance criteria (REQ-xx-nn) as a user would. |
 | `Regression` | Re-run after every build to catch breakage: the whole UI suite, plus both migration (data-loss guard) tests. |
 | `Security` | Hashing/salting, no plaintext, no user enumeration, data isolation and authorisation (acting on someone else's data), and the database password never appearing in errors or the offline notice's tooltip. |
-| `Performance` | Checked against a budget: sign-in time (< 1 s, REQ-NFR-02), or database round trips (a list loads in ONE query, counted by `Database.ConnectionsOpened`, since round trips decide speed on the cloud database). |
+| `Performance` | Checked against a budget: sign-in time (< 3 s, REQ-NFR-02), or database round trips (a list loads in ONE query, counted by `Database.ConnectionsOpened`, since round trips decide speed on the cloud database). |
 | `Usability` | Checks the user is told what to do (specific validation messages, the Owner/Sitter prompt). |
 | `Smoke` | The 12-case sanity slice through the core journey and the launch-time database choice, run first by the build and CI (see [CI.md](CI.md)). SQLite only: the gate's filter is `TestCategory=Smoke&TestCategory!=MySql`. |
 | `MySql` | Opt-in MySQL parity run against a remote MySQL server (see [MySQL parity](#mysql-parity-opt-in)). Excluded from the build gate and CI; skipped unless opted in. |
@@ -537,6 +537,14 @@ rows are labelled with each kind they contain.
   docs/Architecture.md were measured once with a temporary harness. What IS
   automated is the cause: tests assert that each list loads in a single query
   (`Database.ConnectionsOpened`).
+- **The sign-in budget is 3 s.** *Reversed 2026-10-16:* it was 1 s, as REQ-NFR-02
+  was written in Assessment 1. The team raised the requirement to 3 s in the
+  final report when the shared cloud database (REQ-GR-09) was added, as
+  headroom for network round trips. Still stands: sign-in itself was never
+  slow. It passed the old 1 s budget on SQLite and on the cloud server (parity
+  run 2026-10-12). The 10–14 s waits behind DEF-007 were the dashboards
+  loading after login, which this test doesn't time; the single-query tests
+  above guard that.
 - **MySQL parity is not in the build gate or CI.** It is opt-in, so a
   MySQL-only regression is caught only when someone runs it (last run
   2026-10-12, 125/125 passing, including the DEF-008 cases). It also depends on the

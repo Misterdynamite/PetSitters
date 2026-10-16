@@ -19,7 +19,7 @@ sitters can accept or decline.
 | FR-7 | Sitter registers personal details incl. location | `SitterDashboardView` → *My Details* tab |
 | FR-8 | Sitter registers availability, experience, preferences, qualifications, daily rate | `SitterDashboardView` → *My Sitting Profile* tab |
 | FR-O5 / FR-S5 | Owner and sitter chat about an accepted booking | *Chats* / *My Chats* tabs in both dashboards, `Data/ChatRepository` |
-| REQ-GR-09 (proposed) | Shared cloud database with local fallback at launch | `Services/DatabaseSelector`, `Services/AppConfig`, `LoginView` → offline notice |
+| REQ-GR-09 | Shared cloud database with local fallback at launch | `Services/DatabaseSelector`, `Services/AppConfig`, `LoginView` → offline notice |
 
 ## Architecture
 
@@ -61,7 +61,7 @@ closes its pooled MySQL connections.
 ## Persistent data storage (MySQL first, SQLite fallback)
 
 The app uses a **shared cloud MySQL 8 database** when one is configured, and a
-**local SQLite file** otherwise (proposed requirement REQ-GR-09). The choice is
+**local SQLite file** otherwise (requirement REQ-GR-09). The choice is
 made **once, at launch**:
 
 1. `PETSITTERS_DB=sqlite` → local database (cloud skipped).

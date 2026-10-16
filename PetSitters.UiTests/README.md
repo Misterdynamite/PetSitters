@@ -46,8 +46,8 @@ owner sees *Pending* → sitter reviews **full job details** in the popup →
 accepted booking → it shows *Cancelled* and leaves the owner's chats (REQ-PO-07).
 
 Requirements exercised: FR-A1, FR-A2, FR-O1–FR-O4, FR-S1–FR-S5, plus the REQ-GR /
-REQ-PO IDs in the table. **REQ-GR-09** (shared cloud database with local fallback
-at launch) is a *proposed* ID, still to be added to the report.
+REQ-PO IDs in the table, including **REQ-GR-09** (shared cloud database with
+local fallback at launch) through the two `Startup_*` tests.
 
 Partly covered: **FR-O5** (owner-side chat) works in the app, but the suite only
 sends messages from the sitter side; the owner's *Chats* tab is checked only to

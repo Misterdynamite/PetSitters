@@ -8,8 +8,8 @@ using PetSitters.Services;
 namespace PetSitters.Tests
 {
     /// <summary>
-    /// Tests for REQ-GR-09 (proposed: shared cloud database with local fallback
-    /// at launch), i.e. the launch-time database choice (<see cref="DatabaseSelector"/>):
+    /// Tests for REQ-GR-09 (shared cloud database with local fallback at
+    /// launch), i.e. the launch-time database choice (<see cref="DatabaseSelector"/>):
     /// MySQL first, SQLite when MySQL is switched off, not configured or
     /// unreachable. The cloud constructor is injected, so no test here contacts
     /// the real cloud server: "reachable" is simulated with a temp SQLite file,

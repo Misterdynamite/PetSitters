@@ -15,7 +15,10 @@ namespace PetSitters.Tests
     [TestClass]
     public class AuthServiceTests : DatabaseTestBase
     {
-        private const int LoginBudgetMilliseconds = 1000;
+        // REQ-NFR-02: sign-in completes in under 3 s. Raised from 1 s when the shared
+        // cloud database (REQ-GR-09) was added, as headroom for network round trips;
+        // sign-in still measured under the old 1 s on both engines (docs/UnitTests.md).
+        private const int LoginBudgetMilliseconds = 3000;
         private const int LoginSamples = 5;
         public TestContext TestContext { get; set; }
 

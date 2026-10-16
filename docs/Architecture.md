@@ -281,8 +281,8 @@ engine-specific fragments come from `Database.Dialect` (§5.3).
 
 ## 5. Storage: cloud database with local fallback
 
-**REQ-GR-09 (proposed requirement ID, to be added to the report): shared cloud
-database with local fallback at launch.** The app uses the MySQL server when it
+**REQ-GR-09 (a Must requirement in the final report): shared cloud database
+with local fallback at launch.** The app uses the MySQL server when it
 can, and the local SQLite file when it can't. The decision is made **once per
 launch** by `Services/DatabaseSelector.cs`; nothing switches or syncs afterwards.
 

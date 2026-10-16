@@ -10,8 +10,8 @@ using PetSitters.Services;
 namespace PetSitters.Tests
 {
     /// <summary>
-    /// Unit tests for REQ-GR-09 (proposed: shared cloud database with local
-    /// fallback at launch), covering how the database configuration is read: the .env file format
+    /// Unit tests for REQ-GR-09 (shared cloud database with local fallback at
+    /// launch), covering how the database configuration is read: the .env file format
     /// (<see cref="EnvFile"/>), which source wins (<see cref="AppConfig"/>), and
     /// turning DATABASE_URL into a MySQL connection string (<see cref="MySqlUrl"/>).
     ///
