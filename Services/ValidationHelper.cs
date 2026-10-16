@@ -12,7 +12,7 @@ namespace PetSitters.Services
         private static readonly Regex EmailRegex =
             new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.Compiled);
 
-        public const int MinPasswordLength = 5;
+        public const int MinPasswordLength = 6;
 
         /// <summary>
         /// Longest email accepted: 254 characters, the RFC 5321 maximum. Also the
