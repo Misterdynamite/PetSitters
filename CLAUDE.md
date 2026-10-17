@@ -74,8 +74,11 @@ dotnet test PetSitters.Tests -c Debug
 MySQL parity tests are **opt-in** (otherwise all 125 report Skipped/Inconclusive).
 Set `PETSITTERS_TEST_MYSQL_URL` to a `mysql://` URL for a server where databases
 can be created, or `PETSITTERS_TEST_MYSQL=1` to reuse the server from
-`DATABASE_URL`/`.env` (that user must be allowed to create and drop databases),
-then:
+`DATABASE_URL` (that user must be allowed to create and drop databases). Either
+works as an environment variable or as a line in the repo-root `.env` (the
+environment variable wins); `.env` is how to opt in from Visual Studio's Test
+Explorer, but then every Run All, and any unfiltered `dotnet test PetSitters.Tests`
+(including the command above), also runs them (about 5 minutes). Then:
 ```bash
 dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
 ```
@@ -232,8 +235,8 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   engine-specific (last-insert-id, case-insensitive ORDER BY, upsert) in `SqlDialect`,
   not in a repository.
 - Tests use AAA structure, `Method_Scenario_ExpectedResult` names, `[DataRow]` for
-  boundary/equivalence cases, and are tagged to requirement IDs (FR-O*/FR-S*/FR-A*)
-  in comments. Put DB tests in classes deriving from `DatabaseTestBase`.
+  boundary/equivalence cases, and are tagged to requirement IDs (FR-A*/FR-O*/FR-S*
+  and REQ-GR-*/REQ-PO-*/REQ-PS-*/REQ-NFR-*) in comments. Put DB tests in classes deriving from `DatabaseTestBase`.
   Cloud-database tests are tagged REQ-GR-09 ("Shared cloud database with local
   fallback at launch", a Must requirement in the final report).
 - **Every test carries `[TestCategory]` labels on two axes:** a type
@@ -254,8 +257,9 @@ Views/      WPF UserControls, one per screen, swapped into MainWindow
   the password box and Log in button were cut off; the UI tests failed with
   `NoClickablePointException` at the default 920×640 window and had to be run
   maximised. The card is now inside a `ScrollViewer` (`LoginScroll`), like the
-  register screen, and all 9 UI tests pass at the default window size (2026-10-12),
-  so the maximise workaround is no longer needed.
+  register screen, and the UI tests pass at the default window size (all 9 on
+  2026-10-12; all 10 on 2026-10-16, after `BookingChat_*` was added), so the
+  maximise workaround is no longer needed.
   `Login_InASmallWindow_FormScrollsSoEveryFieldCanBeReached` guards it. Keep new
   screens scrollable rather than maximising in the driver.
 - **No sync between the cloud and local stores**, and existing local data is not

@@ -46,9 +46,11 @@ owner sees *Pending* → sitter reviews **full job details** in the popup →
 → appears under active chats → owner sees *Accepted* → owner **cancels** the
 accepted booking → it shows *Cancelled* and leaves the owner's chats (REQ-PO-07).
 
-Requirements exercised: FR-A1, FR-A2, FR-O1–FR-O4, FR-S1–FR-S5, plus the REQ-GR /
-REQ-PO IDs in the table, including **REQ-GR-09** (shared cloud database with
-local fallback at launch) through the two `Startup_*` tests.
+Requirements exercised: FR-A1, FR-A2, FR-O1–FR-O5, FR-S1–FR-S5, plus the REQ-GR /
+REQ-PO / REQ-PS IDs in the table (also REQ-PS-03 and REQ-PO-04, tagged on the
+`OverlappingRequests_*` and `BookingForm_*` tests), including **REQ-GR-09**
+(shared cloud database with local fallback at launch) through the two
+`Startup_*` tests.
 
 Not covered: the *"This chat is closed"* refusal when the **other** person
 changes a booking while a chat is open (sending re-checks the status for that

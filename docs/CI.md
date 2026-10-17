@@ -133,7 +133,7 @@ service level:
 The < 3 s login budget is checked on **local SQLite**, like the rest of the
 gate. The MySQL parity copy of the same performance test also passed against
 the cloud server, at about 195 ms per query, while the budget was still 1 s
-(2026-10-12). The budget was raised from 1 s to 3 s on 2026-10-16 to match
+(2026-10-12), and again with the 3 s budget (2026-10-17). The budget was raised from 1 s to 3 s on 2026-10-16 to match
 REQ-NFR-02 in the final report; see [UnitTests.md](UnitTests.md) → "Known gaps"
 for why.
 
@@ -159,12 +159,24 @@ rejects, and collation or ordering differences.
 **They are strictly opt-in.** Without one of the variables below, all 125 are
 reported **Skipped** (Inconclusive), never failed. The opt-in lives in the test
 code rather than in a filter because Visual Studio's *Run All Tests* ignores
-command-line filters.
+command-line filters. Each variable can be set as an environment variable or as a
+line in the repo-root `.env` (see `.env.example`); the environment variable wins,
+so `PETSITTERS_TEST_MYSQL=0` in the environment turns a `PETSITTERS_TEST_MYSQL=1`
+line in `.env` off for one run. (A `PETSITTERS_TEST_MYSQL_URL` line in `.env` can't
+be turned off that way, because it is checked first: comment it out instead.) Putting it in `.env` is how to run them from Visual Studio's Test Explorer;
+every *Run All Tests*, and any unfiltered `dotnet test PetSitters.Tests`, then
+includes them (about 5 minutes). The build gate and CI
+filter the category out whatever is set.
+
+*Changed 2026-10-17:* the two variables used to be read from the environment
+only, so a `PETSITTERS_TEST_MYSQL=1` line in `.env` was silently ignored and Test
+Explorer reported every MySQL test as Skipped. They are now read from `.env`
+too, with the same precedence as the app's own settings.
 
 | Variable | Effect |
 |----------|--------|
 | `PETSITTERS_TEST_MYSQL_URL` | A `mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-mode=REQUIRED` URL for a server where that user can create databases (the URL must still name a database, but it is ignored). |
-| `PETSITTERS_TEST_MYSQL=1` | Reuse the server in the app's `DATABASE_URL` (environment variable, or the repo-root `.env`). Its user must be allowed to create and drop databases. |
+| `PETSITTERS_TEST_MYSQL=1` | Reuse the server in the app's `DATABASE_URL`. Its user must be allowed to create and drop databases. |
 
 Run (PowerShell; build the app first, as for any test run):
 ```
@@ -187,8 +199,9 @@ dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
   command timeout reading from the socket) while the other 118 passed. **Read a
   timeout failure as "re-run", and an assertion failure as a real difference
   between the engines.**
-- **Last result (2026-10-12, after the DEF-008 fix added 4 cases): 125/125 passed**
-  against the real cloud MySQL server in 4 m 35 s. Earlier: 2026-10-09, after the
+- **Last result (2026-10-17, opted in through the repo-root `.env`): 125/125
+  passed** against the real cloud MySQL server in 4 m 35 s. Earlier: 2026-10-12,
+  after the DEF-008 fix added 4 cases, 125/125 in 4 m 35 s; 2026-10-09, after the
   UI wording changes, 121/121 in 4 m 18 s; 2026-10-07 after
   the review fixes: 121/121 in 4 m 15 s (the rerun after the 118/121 run above),
   after which the server held no `sitters4us_test_*` databases.
@@ -200,7 +213,7 @@ reads the screen. Hosted CI runners have no reliable interactive desktop.
 It also fails if anyone uses the mouse mid-run. Running it in CI would make the
 pipeline red for reasons unrelated to the change being tested. All 10 tests passed
 at the default window size on 2026-10-16. That has held since 2026-10-12, when
-the login form was made scrollable (DEF-005). Before that, from the login redesign until 2026-10-09, the
+the login form was made scrollable (DEF-005). Before that, from the login redesign until the DEF-005 fix on 2026-10-12, the
 login form was clipped at the default 920×640 window and the suite only passed
 with the window maximised.
 
@@ -238,7 +251,7 @@ local database.
 | Build + smoke + full suite (local gate) | `MSBuild.exe PetSitters.csproj /t:Restore,Build /p:Configuration=Debug` |
 | Build only | add `/p:SkipTests=true` |
 | Full suite only | `dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"` (without the filter, the 125 MySQL cases are listed as Skipped unless opted in) |
-| MySQL parity suite (opt-in) | set `PETSITTERS_TEST_MYSQL=1` or `PETSITTERS_TEST_MYSQL_URL`, then `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql` (about 4–7 min) |
+| MySQL parity suite (opt-in) | set `PETSITTERS_TEST_MYSQL=1` or `PETSITTERS_TEST_MYSQL_URL` (environment or `.env`), then `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql` (about 4–7 min) |
 | UI regression suite | `dotnet test PetSitters.UiTests -c Debug` (interactive desktop; don't touch the mouse) |
 | CI | Automatic on push or PR to `main`; manual via **Actions → CI → Run workflow** |
 

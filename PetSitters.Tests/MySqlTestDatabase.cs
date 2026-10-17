@@ -17,9 +17,10 @@ namespace PetSitters.Tests
     /// All Tests" ignores command-line filters, so the opt-in has to live here:
     /// 1. <c>PETSITTERS_TEST_MYSQL_URL</c> = a mysql:// URL for a server you can create
     ///    databases on (it must name a database, but that name isn't used); or
-    /// 2. <c>PETSITTERS_TEST_MYSQL=1</c> = reuse the server from the app's DATABASE_URL
-    ///    (environment variable, or the repo-root .env found by walking up from
-    ///    the test output folder).
+    /// 2. <c>PETSITTERS_TEST_MYSQL=1</c> = reuse the server from the app's DATABASE_URL.
+    /// Each of these (and DATABASE_URL) is read from an environment variable if
+    /// set, else from the repo-root .env, found by walking up from the test output
+    /// folder (see <see cref="Setting"/>).
     /// Without either, every MySQL test is reported Inconclusive (skipped), never
     /// failed. That's what happens in CI and in a normal local run.
     ///
@@ -87,14 +88,15 @@ namespace PetSitters.Tests
                     return;
                 _resolved = true;
 
-                string url = Environment.GetEnvironmentVariable(TestUrlVariable);
-                string appUrl = Environment.GetEnvironmentVariable(AppConfig.DatabaseUrlKey) ?? FindRepoEnvValue(AppConfig.DatabaseUrlKey);
-                if (string.IsNullOrWhiteSpace(url) && Environment.GetEnvironmentVariable(UseAppServerVariable) == "1")
+                string url = Setting(TestUrlVariable);
+                string appUrl = Setting(AppConfig.DatabaseUrlKey);
+                if (string.IsNullOrWhiteSpace(url) && Setting(UseAppServerVariable) == "1")
                     url = appUrl;
                 if (string.IsNullOrWhiteSpace(url))
                 {
-                    _skipReason = "MySQL parity tests are opt-in and were skipped. To run them, set " + TestUrlVariable +
-                                  " to a mysql:// URL, or " + UseAppServerVariable + "=1 to use the server in DATABASE_URL / .env.";
+                    _skipReason = "MySQL parity tests are opt-in and were skipped. To run them, set " + UseAppServerVariable +
+                                  "=1 (uses the server in DATABASE_URL) or " + TestUrlVariable + " to a mysql:// URL, " +
+                                  "either as an environment variable or in the repo-root .env (see .env.example)";   // MSTest adds the full stop
                     return;
                 }
 
@@ -181,6 +183,19 @@ namespace PetSitters.Tests
                     command.ExecuteNonQuery();
                 }
             }
+        }
+
+        /// <summary>
+        /// A test setting, with the same precedence as the app's own settings
+        /// (<see cref="AppConfig"/>): a non-empty environment variable wins, else
+        /// the repo-root .env. Reading the opt-in from .env too means Visual
+        /// Studio's Test Explorer can run the parity tests without VS having to
+        /// be started with the variable set. Null if set in neither.
+        /// </summary>
+        private static string Setting(string key)
+        {
+            string value = Environment.GetEnvironmentVariable(key);
+            return string.IsNullOrWhiteSpace(value) ? FindRepoEnvValue(key)?.Trim() : value.Trim();
         }
 
         /// <summary>Reads one key from the nearest .env above the test output folder (the repo root's).</summary>

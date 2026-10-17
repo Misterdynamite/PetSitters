@@ -12,10 +12,11 @@ requirements traceability matrix, and how to run everything.
   `DATABASE_URL` into a connection string).
 - **Result:** **151 test methods → 292 executed cases on SQLite** (the
   difference is `[DataRow]` data-driven expansion). All passing (last run
-  2026-10-09).
+  2026-10-17).
 - **Plus, opt-in:** **125 MySQL parity cases** that re-run the database tests
   against a real MySQL server. All 125 passing against the real server on
-  2026-10-12 (and on 2026-10-07, on a rerun: the run before it lost 3 cases to
+  2026-10-17, opted in through the repo-root `.env` (also on 2026-10-12, and on
+  2026-10-07 on a rerun: the run before it lost 3 cases to
   network timeouts; see [CI.md](CI.md#mysql-parity-tests-opt-in)). They are skipped unless you ask
   for them (see
   [MySQL parity](#mysql-parity-opt-in)).
@@ -33,7 +34,7 @@ both test projects build, and results appear in Test Explorer.
 the .NET SDK), then run the tests:
 
 ```
-"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" PetSitters.csproj /t:Build /p:Configuration=Debug
+"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" PetSitters.csproj /t:Restore,Build /p:Configuration=Debug
 dotnet test PetSitters.Tests -c Debug
 ```
 
@@ -48,6 +49,10 @@ run is the one exception, and it only happens when you opt in:
 # PowerShell: reuse the server named in DATABASE_URL (environment or the repo-root .env)
 $env:PETSITTERS_TEST_MYSQL = "1"
 dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
+# Or put PETSITTERS_TEST_MYSQL=1 in the repo-root .env: the way to opt in from Visual Studio's
+# Test Explorer, which only sees environment variables set before VS started. Then every
+# Run All (and any unfiltered dotnet test) includes them; PETSITTERS_TEST_MYSQL=0 in the
+# environment turns that off for one run.
 ```
 
 ---
@@ -71,8 +76,9 @@ Every test that needs a database gets its **own** temporary SQLite file, created
 in `TestInitialize` and deleted in `TestCleanup`. Tests never share state and
 never touch the real `%AppData%\PetSitters\petsitters.db` used by the running
 app, or the cloud database, so they can run in any order (or in parallel)
-safely. Apart from the opt-in MySQL run, they don't read the app's `.env`
-either: a test that needs a configuration builds its own, in memory
+safely. Apart from the MySQL parity classes (which read the repo-root `.env` to
+check whether they are opted in, and for `DATABASE_URL`, even in a run where they
+end up skipped), they don't read the app's `.env` either: a test that needs a configuration builds its own, in memory
 (`AppConfig.FromValues`) or as a throwaway temp `.env` file.
 
 The database comes from `DatabaseTestBase.CreateDatabase()`, which is
@@ -229,7 +235,7 @@ Uses a **fixed clock** (noon, 10 Mar 2030) injected into `BookingService`, so re
 |------|------------------|
 | `Insert_AssignsId_AndCanBeFoundByEmailAndId` | Insert assigns an id; lookups by email and id work. |
 | `EmailExists_IsCaseInsensitive` | Email uniqueness check ignores casing. |
-| `GetByRole_ReturnsOnlyThatRole_OrderedByName` | Browsing sitters returns only sitters, name-ordered. |
+| `GetByRole_ReturnsOnlyThatRole_OrderedByName` | `GetByRole` returns only that role, name-ordered. (No screen calls it now: Find Sitters uses `GetSittersWithProfiles`, tested below.) |
 | `UpdateDetails_PersistsEditedFields` | Edited personal details are saved. |
 | `UpdateDetails_DoesNotTouchTheProfilePicture` | Shared database: on a PC where the picture path reads back as "no image", saving name/phone/location doesn't write that empty value back and erase the picture set on another PC (pictures are saved separately, by `UpdateProfileImage`). |
 | `GetSittersWithProfiles_OneQuery_IncludesSittersWithoutProfiles` | Find Sitters loads every sitter with their profile in ONE query (asserted via `Database.ConnectionsOpened`); a sitter without a profile is listed with a null profile; owners aren't listed; joined users carry no password hash. |
@@ -355,7 +361,7 @@ the password never appears.
 ### MySQL parity (opt-in)
 
 **9 classes / 125 cases · REQ-GR-09 · all passing against the real server on
-2026-10-12 (4 m 35 s).** Network stalls show up as timeout failures, not wrong
+2026-10-17 (4 m 35 s; opted in through the repo-root `.env`).** Network stalls show up as timeout failures, not wrong
 answers; the run history is in [CI.md](CI.md#mysql-parity-tests-opt-in).
 
 `MySqlParityTests.cs` defines nine `[TestClass, TestCategory("MySql")]`
@@ -392,17 +398,19 @@ crashes, the next run drops any leftover test database older than 6 hours.
 Unique names mean two people can run it at the same time.
 
 **Strictly opt-in.** It needs a reachable server and takes minutes over the
-internet, so it only runs when one of these is set:
+internet, so it only runs when one of these is set, as an environment variable
+or as a line in the repo-root `.env` (the environment variable wins; see
+`.env.example`):
 
 | Variable | Meaning |
 |----------|---------|
 | `PETSITTERS_TEST_MYSQL_URL` | A `mysql://` URL for a server where you may create databases (the URL must name a database, but that name isn't used). |
-| `PETSITTERS_TEST_MYSQL=1` | Reuse the server from the app's `DATABASE_URL` (environment variable, or the repo-root `.env`). |
+| `PETSITTERS_TEST_MYSQL=1` | Reuse the server from the app's `DATABASE_URL`. |
 
 The account needs permission to create and drop databases, so a least-privilege
 app account can't run it. Without either variable, the 125 cases are reported
 **Skipped** (Inconclusive), never failed: that is what happens in Visual
-Studio's Run All Tests. The build gate and CI go further and filter the
+Studio's Run All Tests unless `.env` opts in. The build gate and CI go further and filter the
 category out (`TestCategory!=MySql`), so they never contact a MySQL server.
 Never add the real `DATABASE_URL` as a CI secret: the repository is public, and
 so are its logs.
@@ -419,20 +427,20 @@ when a requirement changes, quickly find the tests that must be reviewed.
 |--------|-------------|---------------|--------|
 | FR-A1 | Account creation (Owner or Sitter) | `Register_*` (AuthServiceTests); `PasswordHasherTests`; email/password rows in `ValidationHelperTests` | ✅ Passing |
 | FR-A2 | Pet sitter / owner login | `Login_*` (AuthServiceTests); `PasswordHasherTests` | ✅ Passing |
-| FR-O1 | Owner sees / browses potential sitters | `GetByRole_ReturnsOnlyThatRole_OrderedByName` | ✅ Passing |
+| FR-O1 | Owner sees / browses potential sitters | `GetSittersWithProfiles_OneQuery_IncludesSittersWithoutProfiles` (the Find Sitters loader); `GetByRole_ReturnsOnlyThatRole_OrderedByName` | ✅ Passing |
 | FR-O2 | Owner registers personal details (incl. location) | `Insert_AssignsId_*`, `UpdateDetails_PersistsEditedFields` | ✅ Passing |
 | FR-O3 | Owner registers pet details | `PetRepositoryTests`; `TryParseNonNegativeInt_*` (pet age) | ✅ Passing |
 | FR-O4 | Owner requests a booking | `BookingRepositoryTests` (insert/visibility/rate); `BookingCalculationTests` | ✅ Passing |
 | FR-O5 (REQ-PO-05) | Owner chats with sitter once accepted; no chat while pending, declined or cancelled | `ChatPersistenceTests` (persistence + isolation, both directions); UI: `BookingChat_*` (no chat while pending, declined or cancelled; the owner reads the sitter's message and replies; cancelling closes an open chat), `BookingJourney_*` | ✅ Passing |
 | FR-S1 | Sitter registers personal details (incl. location) | `UserRepositoryTests` (shared user table) | ✅ Passing |
 | FR-S2 | Sitter registers availability, experience, prefs, quals, rate | `SitterProfileRepositoryTests`; `TryParseRate_*` | ✅ Passing |
-| FR-S4 | Sitter accepts / declines a request | `UpdateStatus_Accept_IsPersisted`, `GetForSitter_DoesNotReturnAnotherSittersBookings`, `AcceptRequest_*` guards (BookingServiceTests) | ✅ Passing |
+| FR-S4 | Sitter accepts / declines a request | `AcceptRequest_*`, `DeclineRequest_*` (BookingServiceTests); `TryUpdateStatus_*`, `GetForSitter_DoesNotReturnAnotherSittersBookings` (BookingRepositoryTests) | ✅ Passing |
 | REQ-GR-08 | Sitter cannot accept overlapping bookings (FR-07) | `BookingOverlapTests`; `AcceptRequest_Overlap*`, `AcceptRequest_BackToBack*` (BookingServiceTests); UI: `OverlappingRequests_*` | ✅ Passing |
 | REQ-GR-04 | Booking dates/duration/pet validated with specific messages | `BookingValidationTests`; UI: `BookingForm_*` | ✅ Passing |
 | REQ-GR-06 | One account per email per role; login asks which | `SharedEmailTests`; `DatabaseMigrationTests`; `Register_DuplicateEmail_*` (AuthServiceTests); UI: `SharedEmail_*` | ✅ Passing |
 | REQ-PO-08 | No overlapping bookings for the same pet | `SharesPetWith_*`, `IsActive_*` (BookingOverlapTests); `RequestBooking_*`, `DeletePet_*` (DEF-008) (BookingServiceTests); UI: `SamePetDoubleBooking_*` | ✅ Passing |
-| REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `UpdateStatus_Cancel_*` (BookingRepositoryTests); `CancelBooking_*` (BookingServiceTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
-| REQ-GR-09 | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (125 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-12) |
+| REQ-PO-07 | Owner cancels from pending or accepted (DEF-003) | `CancelBooking_*` (BookingServiceTests); `TryUpdateStatus_*`, `UpdateStatus_Cancel_*` (BookingRepositoryTests); UI: `SamePetDoubleBooking_*` (pending), `BookingJourney_*` (accepted) | ✅ Passing |
+| REQ-GR-09 | Shared cloud database with local fallback at launch | `DatabaseSelectorTests`; `DatabaseConfigurationTests`; `MySqlParityTests` (125 cases, opt-in); UI: `Startup_*` | ✅ Passing (parity run 2026-10-17) |
 | FR-S5 (REQ-PS-04) | Sitter chats with owner once accepted; no chat while pending, declined or cancelled | `ChatPersistenceTests`; UI: `BookingChat_*` (no chat while pending, declined or cancelled), `BookingJourney_*` | ✅ Passing |
 
 > FR-S3 (sitter views full job details before deciding) is UI-only presentation
@@ -447,8 +455,8 @@ when a requirement changes, quickly find the tests that must be reviewed.
 > `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` (choosing the local
 > database on purpose shows no offline notice; renamed on 2026-10-09 from
 > `Startup_LocalDatabaseChosen_HeaderSaysLocalDatabase` when the header label
-> was removed). Both passed on 2026-10-12 at the default window size (see
-> [CI.md](CI.md)).
+> was removed). Both passed at the default window size, most recently in the
+> full 10-test run on 2026-10-16 (see [CI.md](CI.md)).
 
 ---
 
@@ -547,7 +555,8 @@ rows are labelled with each kind they contain.
   above guard that.
 - **MySQL parity is not in the build gate or CI.** It is opt-in, so a
   MySQL-only regression is caught only when someone runs it (last run
-  2026-10-12, 125/125 passing, including the DEF-008 cases). It also depends on the
+  2026-10-17, 125/125 passing, including the DEF-008 cases and the 3 s sign-in
+  budget on MySQL). It also depends on the
   network: two runs on 2026-10-07 lost cases to connection timeouts and passed
   when re-run.
 - **The real cloud path at launch is not automated.** `DatabaseSelectorTests`
@@ -566,7 +575,7 @@ dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Boundary"
 dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Security|TestCategory=ErrorHandling"
 dotnet test PetSitters.Tests -c Debug --filter "TestCategory=Unit&TestCategory=InvalidInput"
 dotnet test PetSitters.Tests -c Debug --filter "TestCategory!=MySql"    # what the build gate and CI run
-dotnet test PetSitters.Tests -c Debug --filter "TestCategory=MySql"     # parity run; needs the opt-in variable
+dotnet test PetSitters.Tests -c Debug --filter "TestCategory=MySql"     # parity run; needs the opt-in (environment or .env)
 ```
 
 In Visual Studio, Test Explorer → **Group By → Traits** shows the same labels.

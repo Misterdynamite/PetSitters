@@ -50,7 +50,7 @@ switching or syncing after launch (§5).
 
 ```
 PetSitters.sln
-├── PetSitters/                 The WPF application (assembly "PetSitters")
+├── (repo root)                 The WPF application: PetSitters.csproj, assembly "PetSitters"
 │   ├── App.xaml(.cs)           Startup: opens MainWindow, picks the database in the
 │   │                           background, attaches AppServices; global database-error handler
 │   ├── MainWindow.xaml(.cs)    Shell: header (logo, session bar) + swaps the active view
@@ -403,8 +403,8 @@ the condition is evaluated; not tested).
   committed with placeholders only and documents every key.
 - CI **Gate 0 "No secrets committed"** fails the build if any such file other
   than `.env.example` is tracked, **or** if any tracked file contains a
-  `mysql://user:password@host` URL whose host isn't a placeholder (`HOST`,
-  `localhost`, `*.example.com`, `*.test`), so a URL pasted into code or docs is
+  `mysql://user:password@host` URL whose host isn't a placeholder (`HOST`, `host`,
+  `h`, `localhost`, `127.0.0.1`, `*.example.com`, `*.test`), so a URL pasted into code or docs is
   caught too (see `docs/CI.md`).
 - CI never connects to MySQL: the checkout has no `.env`, no secret is
   configured, and the `MySql` test category is excluded. **Do not** add the
@@ -631,9 +631,9 @@ same rows):
   (an unreachable `DATABASE_URL` opens on the local database, the login screen's
   notice says "Working offline", and registration still works) and
   `Startup_LocalDatabaseChosen_ShowsNoOfflineNotice` (choosing the local
-  database on purpose shows no notice). Both passed on 2026-10-12 at the default
-  window size (the clipped login form, DEF-005, is fixed; until then the UI tests
-  were run maximised).
+  database on purpose shows no notice). Both pass at the default window size,
+  most recently in the full 10-test run on 2026-10-16 (the clipped login form,
+  DEF-005, was fixed on 2026-10-12; until then the UI tests were run maximised).
 
 Counts and the per-test list are in `docs/UnitTests.md`.
 
@@ -872,7 +872,9 @@ the local database.
 # Run
 bin\Debug\PetSitters.exe
 
-# Logic tests (after the app is built). Runs on SQLite; MySQL parity tests report Skipped.
+# Logic tests (after the app is built). Runs on SQLite; the MySQL parity tests report
+# Skipped unless opted in (environment or the repo-root .env), in which case they run
+# too (about 5 minutes; add --filter "TestCategory!=MySql" to leave them out).
 dotnet test PetSitters.Tests -c Debug
 ```
 
@@ -886,6 +888,8 @@ $env:PETSITTERS_TEST_MYSQL_URL = "mysql://USER:PASSWORD@HOST:PORT/DATABASE?ssl-m
 # ... or reuse the server from DATABASE_URL / the repo-root .env:
 $env:PETSITTERS_TEST_MYSQL = "1"
 dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql
+# Either variable can instead be a line in the repo-root .env (see .env.example),
+# which is how to opt in from Visual Studio's Test Explorer.
 ```
 
 Each parity run creates its own database (`sitters4us_test_<UTC yyyyMMddTHHmm>_<8 hex>`),
@@ -898,7 +902,8 @@ The FlaUI UI suite launches the app with `PETSITTERS_DB=sqlite`, so it never
 touches the shared cloud database and its data wipe still resets everything.
 
 Or open `PetSitters.sln` in Visual Studio and use **Test → Run All Tests** (the
-MySQL parity tests show as Skipped unless opted in as above).
+MySQL parity tests show as Skipped unless opted in; in Visual Studio, opt in with
+`PETSITTERS_TEST_MYSQL=1` in the repo-root `.env`).
 
 **Reset all data:**
 - Local database: delete `%AppData%\PetSitters\petsitters.db` and relaunch.

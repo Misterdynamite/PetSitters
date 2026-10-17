@@ -22,7 +22,8 @@
     %AppData% database or the cloud database. MySQL parity tests
     (MySqlParityTests.cs, TestCategory=MySql) re-run the database tests on a
     temporary MySQL database, but only when opted in (PETSITTERS_TEST_MYSQL_URL
-    or PETSITTERS_TEST_MYSQL=1); otherwise they are skipped, and the build gate
+    or PETSITTERS_TEST_MYSQL=1, as an environment variable or in the repo-root
+    .env); otherwise they are skipped, and the build gate
     and CI filter them out. See docs/UnitTests.md.
 
     Targets net472 to match the PetSitters app. Build the app first with VS

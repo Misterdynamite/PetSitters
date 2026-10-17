@@ -42,7 +42,8 @@ Services/    UI-independent logic
              - ValidationHelper.cs   email/password/number validation
              - AuthService.cs        registration + login rules
              - BookingService.cs     booking rules: request (form validation, no same-pet overlap),
-                                     accept (no sitter overlap), owner cancel
+                                     accept (no sitter overlap), owner cancel,
+                                     delete pet (cancels its live bookings first, DEF-008)
              - AppConfig.cs          runtime settings: environment variables, then .env
              - DatabaseSelector.cs   picks the database at launch (cloud first, local fallback)
              - AppServices.cs        composition root (wires everything together)
@@ -128,7 +129,7 @@ to connect it to the cloud database.
 
 A command-line build **also runs the automated tests** (smoke set, then the full
 suite), and fails if any test fails. Add `/p:SkipTests=true` to skip them. The
-same checks run in GitHub Actions on every push, plus a check that no `.env` file
+same checks run in GitHub Actions on every push or pull request to `main`, plus a check that no `.env` file
 has been committed. Neither the build gate nor CI ever connects to MySQL. See
 [docs/CI.md](docs/CI.md).
 
@@ -279,9 +280,10 @@ cloud database.
 - MySQL parity tests: the repository and service tests can be re-run against a
   real MySQL server. They are **opt-in** and skipped otherwise: set
   `PETSITTERS_TEST_MYSQL_URL` to a `mysql://` URL for a server where databases can
-  be created (or `PETSITTERS_TEST_MYSQL=1` to reuse the server from `.env`; its
-  user must be allowed to create and drop databases, so a least-privilege app
-  user can't run it), then
+  be created (or `PETSITTERS_TEST_MYSQL=1` to reuse the server from `DATABASE_URL`;
+  its user must be allowed to create and drop databases, so a least-privilege app
+  user can't run it), either as an environment variable or in `.env` (see
+  `.env.example`; that is how to run them from Visual Studio's Test Explorer), then
   run `dotnet test PetSitters.Tests -c Debug --filter TestCategory=MySql`. Each
   run uses its own throwaway database and drops it afterwards; it never touches
   the app's data.
