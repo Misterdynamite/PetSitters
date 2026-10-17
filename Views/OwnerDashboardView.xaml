@@ -106,7 +106,9 @@
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Image x:Name="PetPreview" Width="64" Height="64" Margin="0,0,8,0" Source="/Assets/Images/Paw2.png"/>
                                 <Button Content="Import photo" Click="ImportPetImage_Click" Width="113"/>
-                                <Button Content="Save pet" Style="{StaticResource CardSaveButton}" Click="AddPet_Click" Margin="8,0,0,0" Width="71"/>
+                                <!-- No "Save pet" button here: one used to sit beside Import photo, but it
+                                     ran the same handler as "Add pet" below, so it only added duplicate pets
+                                     (there is no edit-pet feature to save into). -->
                             </StackPanel>
                             <Button Content="Add pet" Margin="0,12,0,0" Click="AddPet_Click" Height="32"/>
                             <Button x:Name="DeletePetButton" Content="Delete selected pet" Style="{StaticResource DangerButton}"
